@@ -53,12 +53,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down AI News Manager microservice...")
 
-
 app = FastAPI(
     title="AI News Manager",
     description="Персональный новостной аналитик для трейдеров",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/api/docs",      # URL для Swagger UI
+    redoc_url="/api/redoc"     # URL для ReDoc
 )
 
 
