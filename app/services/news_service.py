@@ -22,6 +22,18 @@ class NewsService:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
+    async def get_news_by_ids(self, news_ids: List[int]) -> List[NewsPost]:
+        """Получение списка новостей по списку их ID."""
+        if not news_ids:
+            return []
+        async with async_session() as session:
+            stmt = select(NewsPost).where(NewsPost.id.in_(news_ids))
+            result = await session.execute(stmt)
+            # Сохраняем исходный порядок ID, который вернул Qdrant (по релевантности)
+            news_map = {news.id: news for news in result.scalars().all()}
+            sorted_news = [news_map[id] for id in news_ids if id in news_map]
+            return sorted_news
+
     async def update_news_with_metadata(self, news_id: int, metadata: NewsMetadataSchema) -> None:
         """Обновление новости обогащенными метаданными."""
         async with async_session() as session:

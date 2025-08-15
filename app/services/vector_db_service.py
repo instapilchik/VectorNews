@@ -3,6 +3,7 @@ from qdrant_client import QdrantClient, models
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from app.config import settings
 from typing import List, Dict, Any
+from qdrant_client.http.models import SearchRequest
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,24 @@ class VectorDBService:
             wait=True # Ждем подтверждения от Qdrant
         )
         logger.debug(f"Upserted point for news_id: {news_id}")
+
+
+    def search(self, vector: List[float], limit: int = 10) -> List[models.ScoredPoint]:
+        """
+        Выполняет поиск ближайших векторов в Qdrant.
+        """
+        try:
+            hits = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=vector,
+                limit=limit,
+                with_payload=False, # Нам пока не нужен payload, только ID
+                with_vectors=False
+            )
+            return hits
+        except Exception as e:
+            logger.error(f"Error searching in Qdrant: {e}")
+            return []
 
 # Singleton instance
 vector_db_service = VectorDBService()

@@ -66,7 +66,8 @@ app = FastAPI(
     docs_url="/api/docs",      # URL для Swagger UI
     redoc_url="/api/redoc"     # URL для ReDoc
 )
-
+from app.api.endpoints import agent as agent_router
+app.include_router(agent_router.router, prefix="/api/agent", tags=["AI Agent"])
 
 @app.get("/")
 async def root():
