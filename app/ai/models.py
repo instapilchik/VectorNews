@@ -55,10 +55,10 @@ MODEL_CONFIG = {
 
     # Мощные модели (для дашбордов и сложной аналитики)
     "heavy_models": {
-        "anthropic/claude-3-sonnet": {
+        "anthropic/claude-sonnet-4": {
             "cost_per_1k_input": 0.003,
             "cost_per_1k_output": 0.015,
-            "max_tokens": 4096,
+            "max_tokens": 200000,
             "use_cases": [TaskType.DASHBOARD_GENERATION, TaskType.ANALYSIS, TaskType.CHAT],
             "complexity": [ComplexityLevel.MEDIUM, ComplexityLevel.HIGH],
             "speed": "medium"
@@ -153,7 +153,7 @@ class ModelSelector:
             TaskType.PERSONALIZATION: "google/gemini-2.0-flash-exp",
             TaskType.NEWS_CLASSIFICATION: "google/gemini-2.5-flash-lite",
             TaskType.FILTERING: "anthropic/claude-3-haiku",
-            TaskType.ANALYSIS: "anthropic/claude-3-sonnet"
+            TaskType.ANALYSIS: "anthropic/claude-sonnet-4"
         }
 
         return fallback_map.get(task_type, "anthropic/claude-3-haiku")
