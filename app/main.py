@@ -1,5 +1,6 @@
 from pathlib import Path
 from dotenv import load_dotenv
+
 # Загрузка переменных окружения из .env
 dotenv_path = Path(__file__).resolve().parent.parent / '.env'
 if dotenv_path.exists():

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # AI (для будущих этапов)
     openrouter_api_key: Optional[str] = None
 
+    # --- QDRANT SETTINGS ---
+    qdrant_url: str
+    qdrant_api_key: Optional[str]
+    qdrant_collection_name: str
+
     # App Settings
     environment: str = "development"
     log_level: str = "INFO"

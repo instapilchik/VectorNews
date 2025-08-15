@@ -1,11 +1,25 @@
 from app.tasks.celery_app import celery_app
 from app.services.news_service import NewsService
-from app.services.llm_service import llm_service  # НОВЫЙ ИМПОРТ
+from app.services.llm_service import llm_service
+from app.services.embedding_service import embedding_service
+from app.services.vector_db_service import vector_db_service
 from celery import chain
 import logging
 import asyncio
 
 logger = logging.getLogger(__name__)
+
+
+@celery_app.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    """
+    Инициализация служб при старте воркера Celery.
+    Например, создание коллекции в Qdrant.
+    """
+    logger.info("Initializing services for Celery worker...")
+    # Размер вектора для модели 'intfloat/multilingual-e5-base' - 768
+    vector_db_service.initialize_collection(vector_size=768)
+    logger.info("Services initialized.")
 
 
 @celery_app.task(name="app.tasks.news_classifier.process_unprocessed_news_dispatcher")
@@ -21,10 +35,10 @@ def process_unprocessed_news_dispatcher():
 
     logger.info(f"Found {len(unprocessed_news_list)} news items to process.")
     for news_item in unprocessed_news_list:
-        # ЗАГЛУШКА: Пока запускаем только первый шаг. Позже добавим остальные.
+
         processing_pipeline = chain(
-            enrich_metadata.s(news_item.id)
-            # generate_vector_embedding.s(),
+            enrich_metadata.s(news_item.id),
+            generate_vector_embedding.s(),  # s() без аргумента, т.к. он придет из предыдущей задачи
             # finalize_processing.s()
         )
         processing_pipeline.apply_async(
@@ -35,7 +49,7 @@ def process_unprocessed_news_dispatcher():
     return {"status": "success", "tasks_dispatched": len(unprocessed_news_list)}
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=180)  # Увеличим задержку
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=180)
 def enrich_metadata(self, news_id: int):
     """Шаг 1: Извлекает метаданные из текста новости с помощью LLM."""
     logger.info(f"[enrich_metadata] Starting for news_id: {news_id}")
@@ -62,6 +76,47 @@ def enrich_metadata(self, news_id: int):
 
     except Exception as e:
         logger.error(f"[enrich_metadata] Error processing news_id {news_id}: {e}")
+        raise self.retry(exc=e)
+
+
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
+def generate_vector_embedding(self, news_id: int):
+    """
+    Шаг 2: Создает и сохраняет векторное представление для новости.
+    Принимает news_id от предыдущей задачи `enrich_metadata`.
+    """
+    logger.info(f"[generate_vector_embedding] Starting for news_id: {news_id}")
+    try:
+        news_service = NewsService()
+        news_item = asyncio.run(news_service.get_news_by_id(news_id))
+
+        if not news_item or not news_item.original_text:
+            logger.warning(f"[generate_vector_embedding] News item {news_id} not found or has no text.")
+            return news_id
+
+        # Для эмбеддинга лучше использовать оригинальный текст, чтобы не терять нюансы
+        text_to_embed = news_item.original_text
+
+        # 1. Получаем вектор
+        vector = embedding_service.get_embedding(text_to_embed)
+
+        # 2. Готовим payload для фильтрации в Qdrant
+        # TODO: Все ли важные поля payload мы прописали? Изучить потом
+        payload = {
+            "source_channel": news_item.source_channel,
+            "published_at": news_item.published_at.isoformat(),
+            "category": news_item.category,
+            "importance_score": news_item.importance_score
+        }
+
+        # 3. Сохраняем вектор и payload в Qdrant
+        vector_db_service.upsert_point(news_id=news_item.id, vector=vector, payload=payload)
+
+        logger.info(f"[generate_vector_embedding] Successfully processed news_id: {news_id}")
+        return news_id
+
+    except Exception as e:
+        logger.error(f"[generate_vector_embedding] Error processing news_id {news_id}: {e}")
         raise self.retry(exc=e)
 
 
