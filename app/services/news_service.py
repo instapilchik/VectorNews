@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, desc
 from sqlalchemy.dialects.postgresql import insert
+from app.ai.schemas import NewsMetadataSchema
 from app.models.news import NewsPost
 from app.database import async_session, get_db_info, check_db_connection
 from datetime import datetime, timedelta
@@ -13,6 +14,36 @@ logger = logging.getLogger(__name__)
 class NewsService:
     def __init__(self):
         pass
+
+    async def get_news_by_id(self, news_id: int) -> Optional[NewsPost]:
+        """Получение одной новости по её ID."""
+        async with async_session() as session:
+            stmt = select(NewsPost).where(NewsPost.id == news_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def update_news_with_metadata(self, news_id: int, metadata: NewsMetadataSchema) -> None:
+        """Обновление новости обогащенными метаданными."""
+        async with async_session() as session:
+            try:
+                news_post = await session.get(NewsPost, news_id)
+                if not news_post:
+                    logger.warning(f"News post with id {news_id} not found for metadata update.")
+                    return
+
+                news_post.category = metadata.category.value
+                news_post.summary = metadata.summary
+                news_post.keywords = metadata.keywords
+                news_post.entities = metadata.entities.model_dump()
+                news_post.importance_score = metadata.importance_score
+
+                await session.commit()
+                logger.info(f"Successfully updated metadata for news_id: {news_id}")
+
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error updating news metadata for id {news_id}: {e}")
+                raise e
 
     async def save_news_batch(self, news_items: List[Dict]) -> int:
         """Сохранение батча новостей с дедупликацией"""

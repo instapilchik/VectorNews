@@ -28,8 +28,8 @@ celery_app.conf.update(
             "schedule": settings.parse_interval_minutes * 60.0,  # в секундах
         },
         "classify-news-batch": {
-            "task": "app.tasks.news_classifier.classify_unprocessed_news",
-            "schedule": 300.0,  # каждые 5 минут (заглушка для этапа 3)
+            "task": "app.tasks.news_classifier.process_unprocessed_news_dispatcher", # TODO: проверить
+            "schedule": 60.0,  # каждые 5 минут (заглушка для этапа 3)
         },
     },
 )

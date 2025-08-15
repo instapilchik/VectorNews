@@ -137,6 +137,19 @@ async def start_initial_fill(user=Depends(get_user_from_header)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/admin/process_unprocessed_news_dispatcher")
+async def start_unprocessed(user=Depends(get_user_from_header)):
+    """Тест-ендпоинт для ручного запуска процессирования пайплайна"""
+    from app.tasks.news_classifier import process_unprocessed_news_dispatcher
+
+    try:
+        task = process_unprocessed_news_dispatcher.delay()
+        return {
+            "message": "Uprocess fill started",
+            "task_id": task.id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/news/recent")
 async def get_recent_news(

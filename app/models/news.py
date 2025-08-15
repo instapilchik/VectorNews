@@ -37,10 +37,17 @@ class NewsPost(Base):
     is_humor = Column(Boolean, default=False)
     is_financial_relevant = Column(Boolean, default=True)
 
+    # --- НОВЫЕ ПОЛЯ ДЛЯ ОБОГАЩЕНИЯ ---
+    # TODO: навести порядка, убрать легаси
+    category = Column(String, nullable=True, index=True)
+    summary = Column(Text, nullable=True)
+    keywords = Column(JSONB, nullable=True)
+    entities = Column(JSONB, nullable=True)
+    importance_score = Column(Float, nullable=True, index=True)
+
     # Категоризация
     sector = Column(String(50), nullable=True, index=True)  # currency, commodities, stocks, crypto, geopolitics
     sentiment = Column(String(20), nullable=True)  # positive, negative, neutral
-    importance_score = Column(Float, default=0.0, index=True)
     classification_confidence = Column(Float, nullable=True)
     tags = Column(JSONB, nullable=True)  # ["рубль", "нефть", "санкции"]
 
