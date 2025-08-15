@@ -24,6 +24,10 @@ async_session = sessionmaker(
 # Redis
 redis_client = redis.from_url(settings.redis_url, decode_responses=True)
 
+async def get_db_info():
+    print(f"!!! CELERY WORKER get_db_info DATABASE_URL: {settings.database_url} !!!")
+    return settings.database_url
+
 async def get_db():
     """Dependency для получения DB сессии"""
     async with async_session() as session:

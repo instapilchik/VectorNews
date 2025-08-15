@@ -1,20 +1,19 @@
 from pathlib import Path
 from dotenv import load_dotenv
 # Загрузка переменных окружения из .env
-dotenv_path = Path(__file__).resolve().parent / '.env'
+dotenv_path = Path(__file__).resolve().parent.parent / '.env'
 if dotenv_path.exists():
     load_dotenv(dotenv_path)
     print(f"Загружены переменные окружения из {dotenv_path}")
 else:
     print(f"Внимание: файл .env не найден в {dotenv_path}")
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from contextlib import asynccontextmanager
 import logging
 from app.config import settings
 from app.database import init_db, check_db_connection, check_redis_connection
 from app.api.deps import get_user_from_header
-
 
 # Настройка логирования
 logging.basicConfig(
@@ -23,6 +22,10 @@ logging.basicConfig(
     force=True
 )
 logger = logging.getLogger(__name__)
+
+if settings.environment == "development":
+    import nest_asyncio
+    nest_asyncio.apply()
 
 
 @asynccontextmanager
@@ -53,6 +56,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down AI News Manager microservice...")
 
+
 app = FastAPI(
     title="AI News Manager",
     description="Персональный новостной аналитик для трейдеров",
@@ -69,7 +73,8 @@ async def root():
     return {
         "message": "AI News Manager API",
         "version": "1.0.0",
-        "environment": settings.environment
+        "environment": settings.environment,
+        "telegram_channels": settings.telegram_channels
     }
 
 
@@ -96,6 +101,75 @@ async def test_auth(user=Depends(get_user_from_header)):
         "message": "Authentication successful!",
         "user": user
     }
+
+
+# Новые endpoints для тестирования парсинга
+@app.post("/api/admin/parse-channel")
+async def manual_parse_channel(
+        channel: str,
+        days_back: int = 1,
+        user=Depends(get_user_from_header)
+):
+    """Ручной запуск парсинга канала (для админов)"""
+    from app.tasks.telegram_parser import parse_single_channel
+
+    try:
+        task = parse_single_channel.delay(channel, days_back)
+        return {
+            "message": f"Parsing task started for {channel}",
+            "task_id": task.id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/initial-fill")
+async def start_initial_fill(user=Depends(get_user_from_header)):
+    """Запуск первичного наполнения БД"""
+    from app.tasks.telegram_parser import initial_db_fill
+
+    try:
+        task = initial_db_fill.delay()
+        return {
+            "message": "Initial database fill started",
+            "task_id": task.id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/news/recent")
+async def get_recent_news(
+        limit: int = 20,
+        hours: int = 24,
+        user=Depends(get_user_from_header)
+):
+    """Получение последних новостей"""
+    from app.services.news_service import NewsService
+
+    try:
+        news_service = NewsService()
+        time_range = f"{hours}h" if hours <= 24 else f"{hours // 24}d"
+        news = await news_service.search_news(time_range=time_range, limit=limit)
+
+        return {
+            "count": len(news),
+            "news": [
+                {
+                    "id": item.id,
+                    "source": item.source_channel,
+                    "text": item.original_text[:200] + "..." if len(item.original_text) > 200 else item.original_text,
+                    "published_at": item.published_at,
+                    "category": item.estimated_category,
+                    "views": item.views_count,
+                    "tg_link": item.tg_link
+                }
+                for item in news
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
