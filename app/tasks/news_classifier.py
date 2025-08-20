@@ -106,8 +106,11 @@ def generate_vector_embedding(self, news_id: int):
             "source_channel": news_item.source_channel,
             "published_at": news_item.published_at.isoformat(),
             "category": news_item.category,
-            "importance_score": news_item.importance_score
+            "importance_score": news_item.importance_score,
+            "language": news_item.language
         }
+        # Убираем None значения, чтобы не засорять payload
+        payload = {k: v for k, v in payload.items() if v is not None}
 
         # 3. Сохраняем вектор и payload в Qdrant
         vector_db_service.upsert_point(news_id=news_item.id, vector=vector, payload=payload)
