@@ -26,3 +26,9 @@ class NewsMetadataSchema(BaseModel):
         ge=0.0,
         le=1.0
     )
+
+# --- СХЕМА ДЛЯ РАСШИРЕНИЯ ЗАПРОСА ---
+class StructuredQuerySchema(BaseModel):
+    search_query: str = Field(description="Переформулированный и очищенный от мусора запрос для семантического поиска.")
+    filter_categories: Optional[List[NewsCategory]] = Field(default=None, description="Список релевантных категорий для фильтрации поиска.")
+    time_range_days: int = Field(default=7, description="Предполагаемая глубина поиска в днях (например, 1, 3, 7, 30).")

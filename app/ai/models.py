@@ -26,22 +26,22 @@ class ComplexityLevel(Enum):
 MODEL_CONFIG = {
     # Дешевые модели (для персонализации и простых задач)
     "light_models": {
-        "google/gemini-2.0-flash-exp": {
-            "cost_per_1k_input": 0.000075,
-            "cost_per_1k_output": 0.0003,
-            "max_tokens": 8192,
-            "use_cases": [TaskType.PERSONALIZATION, TaskType.FILTERING, TaskType.CHAT],
-            "complexity": [ComplexityLevel.SIMPLE],
-            "speed": "very_fast"
-        },
-        "openai/gpt-3.5-turbo": {
-            "cost_per_1k_input": 0.0005,
-            "cost_per_1k_output": 0.0015,
-            "max_tokens": 4096,
-            "use_cases": [TaskType.CHAT, TaskType.PERSONALIZATION],
-            "complexity": [ComplexityLevel.SIMPLE, ComplexityLevel.MEDIUM],
-            "speed": "fast"
-        },
+        # "google/gemini-2.0-flash-exp": {
+        #     "cost_per_1k_input": 0.000075,
+        #     "cost_per_1k_output": 0.0003,
+        #     "max_tokens": 8192,
+        #     "use_cases": [TaskType.PERSONALIZATION, TaskType.FILTERING, TaskType.CHAT],
+        #     "complexity": [ComplexityLevel.SIMPLE],
+        #     "speed": "very_fast"
+        # },
+        # "openai/gpt-3.5-turbo": {
+        #     "cost_per_1k_input": 0.0005,
+        #     "cost_per_1k_output": 0.0015,
+        #     "max_tokens": 4096,
+        #     "use_cases": [TaskType.CHAT, TaskType.PERSONALIZATION],
+        #     "complexity": [ComplexityLevel.SIMPLE, ComplexityLevel.MEDIUM],
+        #     "speed": "fast"
+        # },
         "google/gemini-2.5-flash-lite": {
             "cost_per_1k_input": 0.0001,
             "cost_per_1k_output": 0.0004,
@@ -63,22 +63,22 @@ MODEL_CONFIG = {
             "complexity": [ComplexityLevel.MEDIUM, ComplexityLevel.HIGH],
             "speed": "medium"
         },
-        "openai/gpt-4": {
-            "cost_per_1k_input": 0.03,
-            "cost_per_1k_output": 0.06,
-            "max_tokens": 8192,
-            "use_cases": [TaskType.DASHBOARD_GENERATION, TaskType.ANALYSIS],
-            "complexity": [ComplexityLevel.HIGH],
-            "speed": "slow"
-        },
-        "anthropic/claude-3-opus": {
-            "cost_per_1k_input": 0.015,
-            "cost_per_1k_output": 0.075,
-            "max_tokens": 4096,
-            "use_cases": [TaskType.DASHBOARD_GENERATION, TaskType.ANALYSIS],
-            "complexity": [ComplexityLevel.HIGH],
-            "speed": "slow"
-        }
+        # "openai/gpt-4": {
+        #     "cost_per_1k_input": 0.03,
+        #     "cost_per_1k_output": 0.06,
+        #     "max_tokens": 8192,
+        #     "use_cases": [TaskType.DASHBOARD_GENERATION, TaskType.ANALYSIS],
+        #     "complexity": [ComplexityLevel.HIGH],
+        #     "speed": "slow"
+        # },
+        # "anthropic/claude-3-opus": {
+        #     "cost_per_1k_input": 0.015,
+        #     "cost_per_1k_output": 0.075,
+        #     "max_tokens": 4096,
+        #     "use_cases": [TaskType.DASHBOARD_GENERATION, TaskType.ANALYSIS],
+        #     "complexity": [ComplexityLevel.HIGH],
+        #     "speed": "slow"
+        # }
     }
 }
 
@@ -148,11 +148,11 @@ class ModelSelector:
     def _get_fallback_model(self, task_type: TaskType) -> str:
         """Fallback модель по умолчанию"""
         fallback_map = {
-            TaskType.CHAT: "anthropic/claude-3-haiku",
-            TaskType.DASHBOARD_GENERATION: "anthropic/claude-3-sonnet",
-            TaskType.PERSONALIZATION: "google/gemini-2.0-flash-exp",
+            TaskType.CHAT: "anthropic/claude-sonnet-4",
+            TaskType.DASHBOARD_GENERATION: "anthropic/claude-sonnet-4",
+            TaskType.PERSONALIZATION: "google/gemini-2.5-flash-lite",
             TaskType.NEWS_CLASSIFICATION: "google/gemini-2.5-flash-lite",
-            TaskType.FILTERING: "anthropic/claude-3-haiku",
+            TaskType.FILTERING: "google/gemini-2.5-flash-lite",
             TaskType.ANALYSIS: "anthropic/claude-sonnet-4"
         }
 

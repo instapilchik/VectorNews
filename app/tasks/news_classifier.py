@@ -104,7 +104,8 @@ def generate_vector_embedding(self, news_id: int):
         # TODO: Все ли важные поля payload мы прописали? Изучить потом
         payload = {
             "source_channel": news_item.source_channel,
-            "published_at": news_item.published_at.isoformat(),
+            "published_at_iso": news_item.published_at.isoformat(),
+            "published_at": int(news_item.published_at.timestamp()),
             "category": news_item.category,
             "importance_score": news_item.importance_score,
             "language": news_item.language

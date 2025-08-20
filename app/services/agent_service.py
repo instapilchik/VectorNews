@@ -1,12 +1,20 @@
 
 import logging
 from typing import List, Tuple
+from datetime import datetime, timedelta, timezone
+
+# Qdrant импорт для создания фильтров
+from qdrant_client.http import models as qdrant_models
+
 from app.services.vector_db_service import vector_db_service
 from app.services.embedding_service import embedding_service
 from app.services.news_service import NewsService
 from app.models.news import NewsPost
-from app.services.llm_service import llm_service  # НОВЫЙ ИМПОРТ
-from app.ai.models import model_selector, TaskType, ComplexityLevel  # НОВЫЙ ИМПОРТ
+from app.services.llm_service import llm_service
+from app.ai.models import model_selector, TaskType, ComplexityLevel
+from app.ai.schemas import StructuredQuerySchema
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,23 +40,49 @@ class AgentService:
         self.context_news_count = 10  # Сколько новостей даем в контекст LLM
         self.final_sources_count = 5  # Сколько источников показываем пользователю
 
-    async def _search_relevant_news_ids(self, query: str) -> List[int]:
-        """Шаг 1: Векторизует запрос и находит ID релевантных новостей в Qdrant."""
-        logger.info(f"Searching for relevant news for query: '{query[:50]}...'")
+    async def _search_relevant_news(self, structured_query: StructuredQuerySchema) -> List[NewsPost]:
+        """
+        Выполняет "умный" гибридный поиск в Qdrant.
+        """
+        # 1. Векторизуем очищенный запрос от LLM
+        query_vector = self.embedding.get_embedding(f"query: {structured_query.search_query}")
 
-        # Префикс 'query:' используется для запросов, как рекомендовано для e5 моделей
-        query_vector = self.embedding.get_embedding(f"query: {query}")
+        # 2. Собираем фильтр для Qdrant
+        qdrant_filter_conditions = []
 
-        # Ищем в Qdrant. Пока без фильтров, просто топ-N по семантической близости.
-        search_results = self.vector_db.search(vector=query_vector, limit=self.search_limit)
+        # Фильтр по категориям
+        if structured_query.filter_categories:
+            qdrant_filter_conditions.append(
+                qdrant_models.FieldCondition(
+                    key="category",
+                    match=qdrant_models.MatchAny(any=structured_query.filter_categories)
+                )
+            )
+
+        # Временной фильтр
+        if structured_query.time_range_days:
+            start_date = datetime.now(timezone.utc) - timedelta(days=structured_query.time_range_days)
+            qdrant_filter_conditions.append(
+                qdrant_models.FieldCondition(
+                    key="published_at",
+                    range=qdrant_models.Range(gte=int(start_date.timestamp()))
+                )
+            )
+
+        final_filter = qdrant_models.Filter(must=qdrant_filter_conditions) if qdrant_filter_conditions else None
+
+        # 3. Выполняем поиск
+        search_results = self.vector_db.search(vector=query_vector, limit=self.search_limit, query_filter=final_filter)
 
         if not search_results:
-            logger.warning("No relevant news found in vector database.")
+            logger.warning("No relevant news found in vector database with the given filter.")
             return []
 
         news_ids = [result.id for result in search_results]
-        logger.info(f"Found {len(news_ids)} candidate news items in Qdrant.")
-        return news_ids
+        logger.info(f"Found {len(news_ids)} candidate news items in Qdrant using hybrid search.")
+
+        # 4. Получаем полные данные из PostgreSQL
+        return await self.news_service.get_news_by_ids(news_ids)
 
     async def _synthesize_answer(self, query: str, news_context: List[NewsPost]) -> str:
         """
@@ -112,26 +146,23 @@ class AgentService:
 
     async def process_query(self, query: str) -> Tuple[str, List[NewsSource]]:
         """
-        Основной метод обработки запроса. Теперь с генерацией ответа.
+        НОВЫЙ, "умный" пайплайн обработки запроса.
         """
-        # 1. Найти ID релевантных новостей
-        relevant_ids = await self._search_relevant_news_ids(query)
-        if not relevant_ids:
-            return "К сожалению, не удалось найти релевантных новостей по вашему запросу.", []
+        # --- Шаг 1: Расширение и структурирование запроса ---
+        structured_query = await self.llm_service.generate_structured_query(query)
+        logger.info(f"Structured query generated: {structured_query.model_dump_json(indent=2)}")
 
-        # 2. Получить полные данные для этих новостей из PostgreSQL
-        news_items = await self.news_service.get_news_by_ids(relevant_ids)
+        # --- Шаг 2: Гибридный поиск релевантных новостей ---
+        news_items = await self._search_relevant_news(structured_query)
         if not news_items:
-            # Такое может случиться, если ID в Qdrant есть, а в Postgres уже нет
-            logger.warning(f"Could not retrieve news details for IDs: {relevant_ids}")
-            return "Произошла ошибка при извлечении деталей новостей.", []
+            return "К сожалению, по вашему запросу не удалось найти релевантных новостей за указанный период.", []
 
-        # 3. Сгенерировать ответ на основе контекста
-        # Передаем в контекст только часть самых релевантных новостей, чтобы не превысить лимит токенов
+        # --- Шаг 3: Синтез ответа на основе найденного контекста ---
         context_for_synthesis = news_items[:self.context_news_count]
+        # ВАЖНО: передаем исходный query, чтобы LLM отвечала на вопрос пользователя, а не на переформулированный
         generated_answer = await self._synthesize_answer(query, context_for_synthesis)
 
-        # 4. Сформировать список источников для показа пользователю
+        # --- Шаг 4: Формирование источников для ответа ---
         sources = [
             NewsSource(
                 id=item.id,

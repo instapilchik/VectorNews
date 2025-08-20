@@ -2,7 +2,7 @@ import logging
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from app.config import settings
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from qdrant_client.http.models import SearchRequest
 
 logger = logging.getLogger(__name__)
@@ -55,17 +55,17 @@ class VectorDBService:
         )
         logger.debug(f"Upserted point for news_id: {news_id}")
 
-
-    def search(self, vector: List[float], limit: int = 10) -> List[models.ScoredPoint]:
+    def search(self, vector: List[float], limit: int = 10, query_filter: Optional[models.Filter] = None) -> List[models.ScoredPoint]:
         """
-        Выполняет поиск ближайших векторов в Qdrant.
+        Выполняет поиск ближайших векторов в Qdrant, теперь с поддержкой фильтров.
         """
         try:
             hits = self.client.search(
                 collection_name=self.collection_name,
                 query_vector=vector,
+                query_filter=query_filter, # ИСПОЛЬЗУЕМ ФИЛЬТР
                 limit=limit,
-                with_payload=False, # Нам пока не нужен payload, только ID
+                with_payload=False,
                 with_vectors=False
             )
             return hits
