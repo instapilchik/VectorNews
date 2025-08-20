@@ -12,7 +12,7 @@ async def verify_api_token(x_api_token: str = Header(...)):
     return True
 
 async def get_user_from_header(
-    x_user_id: int = Header(...),
+    x_user_id: str = Header(...), # TODO: str or int?
     x_user_data: str = Header(None),  # JSON string с доп. данными о пользователе
     _: bool = Depends(verify_api_token)
 ):

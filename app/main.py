@@ -67,7 +67,9 @@ app = FastAPI(
     redoc_url="/api/redoc"     # URL для ReDoc
 )
 from app.api.endpoints import agent as agent_router
+from app.api.endpoints import agent_settings as agent_settings_router
 app.include_router(agent_router.router, prefix="/api/agent", tags=["AI Agent"])
+app.include_router(agent_settings_router.router, prefix="/api/agent", tags=["AI Agent Settings"])
 
 @app.get("/")
 async def root():
@@ -129,6 +131,8 @@ async def manual_parse_channel(
 async def start_initial_fill(user=Depends(get_user_from_header)):
     """Запуск первичного наполнения БД"""
     from app.tasks.telegram_parser import initial_db_fill
+    # from app.services.vector_db_service import vector_db_service
+    # vector_db_service.initialize_collection(vector_size=768)
 
     try:
         task = initial_db_fill.delay()
@@ -143,6 +147,8 @@ async def start_initial_fill(user=Depends(get_user_from_header)):
 async def start_unprocessed(user=Depends(get_user_from_header)):
     """Тест-ендпоинт для ручного запуска процессирования пайплайна"""
     from app.tasks.news_classifier import process_unprocessed_news_dispatcher
+    # from app.services.vector_db_service import vector_db_service
+    # vector_db_service.initialize_collection(vector_size=768)
 
     try:
         task = process_unprocessed_news_dispatcher.delay()

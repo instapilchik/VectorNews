@@ -13,6 +13,8 @@ from app.models.news import NewsPost
 from app.services.llm_service import llm_service
 from app.ai.models import model_selector, TaskType, ComplexityLevel
 from app.ai.schemas import StructuredQuerySchema
+from app.services.agent_settings_service import agent_settings_service
+from app.schemas.agent_settings import AgentSettingsSchema
 
 
 
@@ -39,35 +41,45 @@ class AgentService:
         self.search_limit = 50  # Сколько кандидатов ищем в векторной базе
         self.context_news_count = 10  # Сколько новостей даем в контекст LLM
         self.final_sources_count = 5  # Сколько источников показываем пользователю
+        self.settings_service = agent_settings_service
 
-    async def _search_relevant_news(self, structured_query: StructuredQuerySchema) -> List[NewsPost]:
+    async def _search_relevant_news(self, structured_query: StructuredQuerySchema, settings: AgentSettingsSchema) -> \
+    List[NewsPost]:
         """
         Выполняет "умный" гибридный поиск в Qdrant.
         """
         # 1. Векторизуем очищенный запрос от LLM
         query_vector = self.embedding.get_embedding(f"query: {structured_query.search_query}")
 
-        # 2. Собираем фильтр для Qdrant
+        # 2. Собираем единый, корректный фильтр для Qdrant
         qdrant_filter_conditions = []
 
-        # Фильтр по категориям
+        # Шаг 2.1: Объединяем категории из запроса и интересов пользователя
+        final_categories = set()
         if structured_query.filter_categories:
+            # Используем .value, если filter_categories содержит Enum-объекты
+            final_categories.update([cat.value for cat in structured_query.filter_categories])
+        if settings.focus_interests:
+            final_categories.update(settings.focus_interests)
+
+        if final_categories:
             qdrant_filter_conditions.append(
                 qdrant_models.FieldCondition(
                     key="category",
-                    match=qdrant_models.MatchAny(any=structured_query.filter_categories)
+                    match=qdrant_models.MatchAny(any=list(final_categories))
                 )
             )
 
-        # Временной фильтр
-        if structured_query.time_range_days:
-            start_date = datetime.now(timezone.utc) - timedelta(days=structured_query.time_range_days)
-            qdrant_filter_conditions.append(
-                qdrant_models.FieldCondition(
-                    key="published_at",
-                    range=qdrant_models.Range(gte=int(start_date.timestamp()))
-                )
+        # Шаг 2.2: Определяем временной диапазон. Настройки пользователя в приоритете.
+        time_days = settings.historical_context_days if settings else structured_query.time_range_days
+
+        start_date = datetime.now(timezone.utc) - timedelta(days=time_days)
+        qdrant_filter_conditions.append(
+            qdrant_models.FieldCondition(
+                key="published_at",
+                range=qdrant_models.Range(gte=int(start_date.timestamp()))
             )
+        )
 
         final_filter = qdrant_models.Filter(must=qdrant_filter_conditions) if qdrant_filter_conditions else None
 
@@ -84,7 +96,7 @@ class AgentService:
         # 4. Получаем полные данные из PostgreSQL
         return await self.news_service.get_news_by_ids(news_ids)
 
-    async def _synthesize_answer(self, query: str, news_context: List[NewsPost]) -> str:
+    async def _synthesize_answer(self, query: str, news_context: List[NewsPost], settings: AgentSettingsSchema) -> str:
         """
         Шаг 2: Генерирует связный ответ на основе найденных новостей с помощью LLM.
         """
@@ -106,13 +118,28 @@ class AgentService:
         )
 
         # 3. Формируем промпт для LLM
-        system_prompt = """
-        Ты - AI-новостной аналитик для трейдеров. Твоя задача - отвечать на вопросы пользователя, строго основываясь на предоставленных новостных источниках.
+        # --- Персонализированный системный промпт ---
+        system_prompt = f"""
+        Ты - AI-новостной аналитик для трейдеров по имени {settings.agent_name}.
+
+        Твои инструкции по общению с пользователем:
+        - Стиль подачи информации: `{settings.information_style.value}`.
+        - Тон общения: `{settings.communication_tone.value}`.
+        - Глубина анализа: `{settings.analysis_depth.value}`.
+
+        Твои общие правила:
         - Отвечай структурированно, ясно и по делу.
         - Не выдумывай информацию, которой нет в источниках.
-        - Если в источниках нет ответа на вопрос, честно скажи об этом.
-        - Не давай никаких финансовых советов или прогнозов. Твоя роль - анализ и интерпретация новостей.
+        - Не давай никаких финансовых советов или прогнозов.
         """
+
+        # system_prompt = """
+        # Ты - AI-новостной аналитик для трейдеров. Твоя задача - отвечать на вопросы пользователя, строго основываясь на предоставленных новостных источниках.
+        # - Отвечай структурированно, ясно и по делу.
+        # - Не выдумывай информацию, которой нет в источниках.
+        # - Если в источниках нет ответа на вопрос, честно скажи об этом.
+        # - Не давай никаких финансовых советов или прогнозов. Твоя роль - анализ и интерпретация новостей.
+        # """
 
         user_prompt = f"""
         Проанализируй следующие новостные источники и дай развернутый ответ на мой вопрос.
@@ -144,23 +171,27 @@ class AgentService:
         logger.info(f"Synthesized answer generated successfully.")
         return answer.strip()
 
-    async def process_query(self, query: str) -> Tuple[str, List[NewsSource]]:
+    async def process_query(self, query: str, user_id: str) -> Tuple[str, List[NewsSource]]:
         """
         НОВЫЙ, "умный" пайплайн обработки запроса.
         """
-        # --- Шаг 1: Расширение и структурирование запроса ---
-        structured_query = await self.llm_service.generate_structured_query(query)
+        # --- Шаг 0: Получение настроек пользователя ---
+        settings = await self.settings_service.get_settings(user_id)
+        logger.info(f"Using settings for user {user_id}: {settings.model_dump_json(indent=2)}")
+
+        # --- Шаг 1: Расширение запроса с учетом настроек ---
+        structured_query = await self.llm_service.generate_structured_query(query, settings)
         logger.info(f"Structured query generated: {structured_query.model_dump_json(indent=2)}")
 
         # --- Шаг 2: Гибридный поиск релевантных новостей ---
-        news_items = await self._search_relevant_news(structured_query)
+        news_items = await self._search_relevant_news(structured_query, settings)
         if not news_items:
             return "К сожалению, по вашему запросу не удалось найти релевантных новостей за указанный период.", []
 
         # --- Шаг 3: Синтез ответа на основе найденного контекста ---
         context_for_synthesis = news_items[:self.context_news_count]
         # ВАЖНО: передаем исходный query, чтобы LLM отвечала на вопрос пользователя, а не на переформулированный
-        generated_answer = await self._synthesize_answer(query, context_for_synthesis)
+        generated_answer = await self._synthesize_answer(query, context_for_synthesis, settings)
 
         # --- Шаг 4: Формирование источников для ответа ---
         sources = [

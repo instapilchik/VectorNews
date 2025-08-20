@@ -5,6 +5,7 @@ from app.ai.client import openrouter_client
 from app.ai.models import model_selector, TaskType, ComplexityLevel
 from app.ai.schemas import NewsMetadataSchema, StructuredQuerySchema, NewsCategory
 from pydantic import ValidationError, BaseModel
+from app.schemas.agent_settings import AgentSettingsSchema # НОВЫЙ ИМПОРТ
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +29,24 @@ class LLMService:
         - Если информации нет — ставь пустой массив или null, но поле должно присутствовать.
         """
 
-    def _get_query_structuring_system_prompt(self) -> str:
+    def _get_query_structuring_system_prompt(self, settings: Optional[AgentSettingsSchema] = None) -> str:
         """Промпт для задачи структурирования запроса пользователя."""
         categories_list = [e.value for e in NewsCategory]
 
         schema_json_string = json.dumps(StructuredQuerySchema.model_json_schema(), ensure_ascii=False, indent=2)
+
+        # --- КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ ---
+        user_context_prompt = ""
+        if settings and settings.focus_interests:
+            user_context_prompt = f"\nКОНТЕКСТ ПОЛЬЗОВАТЕЛЯ: Его основные интересы - {settings.focus_interests}. Учитывай это при переформулировании общего запроса в более конкретный."
 
         return f"""
         Ты - AI-помощник для анализа запросов к новостной базе. Твоя задача - превратить нечеткий запрос пользователя в структурированный JSON-объект для поиска.
         Доступные категории для поиска: {categories_list}.
         Проанализируй запрос и определи наиболее подходящие параметры поиска.
         В поле `search_query` верни запрос, очищенный от мусора и переформулированный для наилучшего семантического поиска.
+        
+        {user_context_prompt}
 
         Строго придерживайся следующей JSON Schema для твоего ответа:
         ```json
@@ -100,11 +108,11 @@ class LLMService:
             model_name)
 
 
-    async def generate_structured_query(self, query: str) -> StructuredQuerySchema:
+    async def generate_structured_query(self, query: str, settings: Optional[AgentSettingsSchema] = None) -> StructuredQuerySchema:
         """Генерирует структурированную 'дорожную карту' для поиска из запроса пользователя."""
         model_name = self.model_selector.select_model(TaskType.FILTERING, ComplexityLevel.SIMPLE, prefer_speed=True)
 
-        system_prompt = self._get_query_structuring_system_prompt()
+        system_prompt = self._get_query_structuring_system_prompt(settings) # Передаем настройки
         user_prompt = f"Запрос пользователя: '{query}'"
 
         try:

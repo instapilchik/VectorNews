@@ -1,11 +1,13 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 import redis.asyncio as redis
 from app.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
+
+Base = declarative_base()
 
 # PostgreSQL
 engine = create_async_engine(
@@ -46,9 +48,10 @@ async def get_redis():
 async def init_db():
     """Создание таблиц в БД"""
     try:
-        from app.models import Base
+        from app.models.news import NewsPost
+        from app.models.agent_settings import AgentSettings
+
         async with engine.begin() as conn:
-            # В production лучше использовать alembic, но для MVP это норм
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created successfully")
     except Exception as e:
