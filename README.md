@@ -28,7 +28,7 @@ uvicorn app.main:app --reload
 - Health check: http://localhost:8000/health
 - Docs: http://localhost:8000/docs
 - Test auth: http://localhost:8000/api/test (с headers)
-- Example: http://localhost:8000/api/candles?exchange=binance&symbol=BTCUSDT&timeframe=60&market_type=spot&limit=500
+
 ## Тест аутентификации
 
 ```bash
