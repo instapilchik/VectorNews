@@ -1,39 +1,68 @@
-"""
-# AI News Manager - Этап 1
+# NewsEdge
 
-## Запуск
+Персональный новостной аналитик для трейдеров с AI-powered поиском и анализом.
 
-1. Создайте .env файл:
-```bash
-cp .env.example .env
-```
+## Описание
 
-2. Запустите зависимости:
-```bash
-docker-compose up -d
-```
+Сервис автоматически собирает финансовые новости из Telegram-каналов, обрабатывает их с помощью LLM, и позволяет задавать вопросы на естественном языке. Использует RAG-архитектуру для точного поиска релевантной информации.
 
-3. Установите зависимости:
+**Основные возможности:**
+- Автоматический парсинг новостей из Telegram
+- Классификация и оценка важности событий
+- Векторный поиск по семантике
+- Персонализированные ответы на вопросы
+- Готовые дашборды (горячие темы, тематические подборки)
+
+## Стек технологий
+
+- **Backend:** FastAPI, Celery
+- **Database:** PostgreSQL, Redis, Qdrant (vector DB)
+- **AI:** OpenRouter API, sentence-transformers
+- **Parsing:** Telethon
+
+## Быстрый старт
+
+1. Установите зависимости:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Запустите приложение:
+2. Создайте `.env` файл с конфигурацией:
+```bash
+cp .env.example .env
+# Заполните необходимые переменные
+```
+
+3. Запустите инфраструктуру:
+```bash
+docker-compose up -d
+```
+
+4. Запустите API:
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## Проверка
-
-- Health check: http://localhost:8000/health
-- Docs: http://localhost:8000/docs
-- Test auth: http://localhost:8000/api/test (с headers)
-- Example: http://localhost:8000/api/candles?exchange=binance&symbol=BTCUSDT&timeframe=60&market_type=spot&limit=500
-## Тест аутентификации
-
+5. Запустите Celery worker:
 ```bash
-curl -X GET "http://localhost:8000/api/test" \
-  -H "X-API-Token: super_secret_api_token_xyz123" \
-  -H "X-User-ID: 123" \
-  -H "X-User-Data: {\"name\": \"Test User\"}"
+celery -A app.tasks.celery_app worker --loglevel=info
+```
+
+## API Endpoints
+
+- `POST /api/agent/chat` - Задать вопрос по новостям
+- `GET /api/dashboards/hot-topics` - Горячие темы
+- `GET /api/dashboards/daily-briefing` - Сводка за день
+- `GET /api/dashboards/thematic` - Новости по категориям
+
+## Документация
+
+Swagger UI доступен по адресу: `http://localhost:8000/api/docs`
+
+## Архитектура
+
+```
+Telegram → Parser → PostgreSQL → Classifier (LLM) → Vector DB (Qdrant)
+                                                              ↓
+User Query → Query Expansion (LLM) → Semantic Search → Answer Synthesis (LLM)
 ```
