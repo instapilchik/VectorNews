@@ -7,7 +7,8 @@ celery_app = Celery(
     backend=settings.celery_result_backend,
     include=[
         "app.tasks.telegram_parser",
-        "app.tasks.news_classifier"  # Для этапа 3
+        "app.tasks.news_classifier",  # Для этапа 3
+        "app.tasks.dashboards"
     ]
 )
 # Если мы в режиме разработки, включаем "eager" режим
@@ -30,6 +31,10 @@ celery_app.conf.update(
         "classify-news-batch": {
             "task": "app.tasks.news_classifier.process_unprocessed_news_dispatcher", # TODO: проверить
             "schedule": 60.0,  # каждые 5 минут (заглушка для этапа 3)
+        },
+        "calculate-hot-topics": {
+            "task": "app.tasks.dashboards.calculate_hot_topics",
+            "schedule": 3600.0,  # каждый час
         },
     },
 )

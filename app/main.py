@@ -68,8 +68,11 @@ app = FastAPI(
 )
 from app.api.endpoints import agent as agent_router
 from app.api.endpoints import agent_settings as agent_settings_router
+from app.api.endpoints import dashboards as dashboards_router
+
 app.include_router(agent_router.router, prefix="/api/agent", tags=["AI Agent"])
 app.include_router(agent_settings_router.router, prefix="/api/agent", tags=["AI Agent Settings"])
+app.include_router(dashboards_router.router, prefix="/api/dashboards", tags=["Dashboards"])
 
 @app.get("/")
 async def root():
@@ -158,6 +161,22 @@ async def start_unprocessed(user=Depends(get_user_from_header)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/calculate_hot_topics")
+async def start_hot_topics_calculation(user=Depends(get_user_from_header)):
+    """Ендпоинт для ручного запуска расчёта горячих тем"""
+    from app.tasks.dashboards import calculate_hot_topics
+
+    try:
+        task = calculate_hot_topics.delay()
+        return {
+            "message": "Hot topics calculation started",
+            "task_id": task.id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/news/recent")
 async def get_recent_news(

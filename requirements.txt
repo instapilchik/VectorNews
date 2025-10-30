@@ -11,4 +11,5 @@ telethon==1.33.1
 qdrant-client
 sentence-transformers
 torch
+hdbscan==0.8.40
 # pip install torch --index-url https://download.pytorch.org/whl/cpu

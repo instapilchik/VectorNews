@@ -1,6 +1,6 @@
 
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from datetime import datetime, timedelta, timezone
 
 # Qdrant импорт для создания фильтров
@@ -43,45 +43,60 @@ class AgentService:
         self.final_sources_count = 5  # Сколько источников показываем пользователю
         self.settings_service = agent_settings_service
 
-    async def _search_relevant_news(self, structured_query: StructuredQuerySchema, settings: AgentSettingsSchema) -> \
-    List[NewsPost]:
+    async def _search_relevant_news(self, structured_query: StructuredQuerySchema, settings: AgentSettingsSchema, override_filters: Optional[dict] = None) -> List[NewsPost]:
         """
         Выполняет "умный" гибридный поиск в Qdrant.
         """
         # 1. Векторизуем очищенный запрос от LLM
         query_vector = self.embedding.get_embedding(f"query: {structured_query.search_query}")
 
-        # 2. Собираем единый, корректный фильтр для Qdrant
-        qdrant_filter_conditions = []
+        final_filter = None
+        if override_filters:
+            # Если переданы переопределяющие фильтры, используем только их
+            logger.info(f"Using override filters for search: {override_filters}")
+            qdrant_filter_conditions = []
+            if "time_range_days" in override_filters:
+                start_date = datetime.now(timezone.utc) - timedelta(days=override_filters["time_range_days"])
+                qdrant_filter_conditions.append(
+                    qdrant_models.FieldCondition(key="published_at", range=qdrant_models.Range(gte=int(start_date.timestamp())))
+                )
+            if "importance_gte" in override_filters:
+                 qdrant_filter_conditions.append(
+                    qdrant_models.FieldCondition(key="importance_score", range=qdrant_models.Range(gte=override_filters["importance_gte"]))
+                )
+            final_filter = qdrant_models.Filter(must=qdrant_filter_conditions)
+        else:
+            # 2. Собираем единый, корректный фильтр для Qdrant
+            qdrant_filter_conditions = []
 
-        # Шаг 2.1: Объединяем категории из запроса и интересов пользователя
-        final_categories = set()
-        if structured_query.filter_categories:
-            # Используем .value, если filter_categories содержит Enum-объекты
-            final_categories.update([cat.value for cat in structured_query.filter_categories])
-        if settings.focus_interests:
-            final_categories.update(settings.focus_interests)
+            # Шаг 2.1: Объединяем категории из запроса и интересов пользователя
+            final_categories = set()
+            if structured_query.filter_categories:
+                # Используем .value, если filter_categories содержит Enum-объекты
+                final_categories.update([cat.value for cat in structured_query.filter_categories])
+            if settings.focus_interests:
+                final_categories.update(settings.focus_interests)
 
-        if final_categories:
+            if final_categories:
+                qdrant_filter_conditions.append(
+                    qdrant_models.FieldCondition(
+                        key="category",
+                        match=qdrant_models.MatchAny(any=list(final_categories))
+                    )
+                )
+
+            # Шаг 2.2: Определяем временной диапазон. Настройки пользователя в приоритете.
+            time_days = settings.historical_context_days if settings else structured_query.time_range_days
+
+            start_date = datetime.now(timezone.utc) - timedelta(days=time_days)
             qdrant_filter_conditions.append(
                 qdrant_models.FieldCondition(
-                    key="category",
-                    match=qdrant_models.MatchAny(any=list(final_categories))
+                    key="published_at",
+                    range=qdrant_models.Range(gte=int(start_date.timestamp()))
                 )
             )
 
-        # Шаг 2.2: Определяем временной диапазон. Настройки пользователя в приоритете.
-        time_days = settings.historical_context_days if settings else structured_query.time_range_days
-
-        start_date = datetime.now(timezone.utc) - timedelta(days=time_days)
-        qdrant_filter_conditions.append(
-            qdrant_models.FieldCondition(
-                key="published_at",
-                range=qdrant_models.Range(gte=int(start_date.timestamp()))
-            )
-        )
-
-        final_filter = qdrant_models.Filter(must=qdrant_filter_conditions) if qdrant_filter_conditions else None
+            final_filter = qdrant_models.Filter(must=qdrant_filter_conditions) if qdrant_filter_conditions else None
 
         # 3. Выполняем поиск
         search_results = self.vector_db.search(vector=query_vector, limit=self.search_limit, query_filter=final_filter)
@@ -171,20 +186,24 @@ class AgentService:
         logger.info(f"Synthesized answer generated successfully.")
         return answer.strip()
 
-    async def process_query(self, query: str, user_id: str) -> Tuple[str, List[NewsSource]]:
+    async def process_query(self, query: str, user_id: str, override_filters: Optional[dict] = None) -> Tuple[str, List[NewsSource]]:
         """
-        НОВЫЙ, "умный" пайплайн обработки запроса.
+        "умный" пайплайн обработки запроса.
         """
         # --- Шаг 0: Получение настроек пользователя ---
         settings = await self.settings_service.get_settings(user_id)
         logger.info(f"Using settings for user {user_id}: {settings.model_dump_json(indent=2)}")
 
         # --- Шаг 1: Расширение запроса с учетом настроек ---
-        structured_query = await self.llm_service.generate_structured_query(query, settings)
+        if override_filters:
+            # Для дашбордов пропускаем Query Expansion
+            structured_query = StructuredQuerySchema(search_query=query, time_range_days=override_filters.get("time_range_days", 7))
+        else:
+            structured_query = await self.llm_service.generate_structured_query(query, settings)
         logger.info(f"Structured query generated: {structured_query.model_dump_json(indent=2)}")
 
         # --- Шаг 2: Гибридный поиск релевантных новостей ---
-        news_items = await self._search_relevant_news(structured_query, settings)
+        news_items = await self._search_relevant_news(structured_query, settings, override_filters)
         if not news_items:
             return "К сожалению, по вашему запросу не удалось найти релевантных новостей за указанный период.", []
 

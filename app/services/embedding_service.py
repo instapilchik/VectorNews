@@ -16,7 +16,7 @@ class EmbeddingService:
     def __init__(self):
         if EmbeddingService._model is None:
             logger.info(f"Loading embedding model '{self._model_name}'...")
-            # TODO: Для production можно указать cache_folder, чтобы модель не скачивалась каждый раз при рестарте пода
+            # TODO: Для production указать cache_folder, чтобы модель не скачивалась каждый раз при рестарте пода
             EmbeddingService._model = SentenceTransformer(self._model_name)
             logger.info("Embedding model loaded successfully.")
 

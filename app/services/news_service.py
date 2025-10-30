@@ -15,6 +15,19 @@ class NewsService:
     def __init__(self):
         pass
 
+    async def get_news_by_category(self, category: str, limit: int = 20) -> List[NewsPost]:
+        """Получение последних новостей по конкретной категории."""
+        async with async_session() as session:
+            stmt = select(NewsPost).where(
+                and_(
+                    NewsPost.category == category,
+                    NewsPost.is_processed == True
+                )
+            ).order_by(desc(NewsPost.published_at)).limit(limit)
+
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
     async def get_news_by_id(self, news_id: int) -> Optional[NewsPost]:
         """Получение одной новости по её ID."""
         async with async_session() as session:
@@ -97,13 +110,15 @@ class NewsService:
 
     async def get_unprocessed_news(self, limit: int = 20) -> List[NewsPost]:
         """Получение необработанных новостей для классификации"""
+        from sqlalchemy import select, and_, desc
+
         async with async_session() as session:
             stmt = select(NewsPost).where(
                 and_(
                     NewsPost.is_processed == False,
                     NewsPost.original_text.isnot(None)
                 )
-            ).order_by(NewsPost.created_at).limit(limit)
+            ).order_by(desc(NewsPost.published_at)).limit(limit)
 
             result = await session.execute(stmt)
             return result.scalars().all()

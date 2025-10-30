@@ -62,8 +62,6 @@ async def check_db_connection():
     """Проверяет соединение с базой данных"""
     try:
         async with engine.connect() as conn:
-            # 2. ИЗМЕНИТЕ ЭТУ СТРОКУ
-            # Вместо session.execute можно использовать conn.execute, что более правильно для простых проверок
             await conn.execute(text("SELECT 1"))
         logger.info("Database connection successful.")
         return True
