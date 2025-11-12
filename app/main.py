@@ -156,7 +156,7 @@ async def start_unprocessed(user=Depends(get_user_from_header)):
     try:
         task = process_unprocessed_news_dispatcher.delay()
         return {
-            "message": "Uprocess fill started",
+            "message": "Processing unprocessed news started",
             "task_id": task.id
         }
     except Exception as e:
