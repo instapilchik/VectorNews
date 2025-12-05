@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
 
-from app.api.deps import get_user_from_header
+from app.api.deps import get_user_from_header, limiter
 from app.services.agent_service import agent_service, NewsSource
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # --- Pydantic модели для API ---
 
@@ -27,9 +28,11 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse, summary="Отправить сообщение ИИ-агенту")
+@limiter.limit("20/minute")
 async def handle_chat(
     request: ChatRequest,
-    user_info=Depends(get_user_from_header) # Защищаем эндпоинт и получаем user_id
+    req: Request,
+    user_info=Depends(get_user_from_header)
 ):
     """
     Основной эндпоинт для взаимодействия с ИИ-агентом.

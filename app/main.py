@@ -9,12 +9,14 @@ if dotenv_path.exists():
 else:
     print(f"Внимание: файл .env не найден в {dotenv_path}")
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from contextlib import asynccontextmanager
 import logging
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import init_db, check_db_connection, check_redis_connection
-from app.api.deps import get_user_from_header
+from app.api.deps import get_user_from_header, limiter
 
 # Настройка логирования
 logging.basicConfig(
@@ -61,11 +63,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI News Manager",
     description="Персональный новостной аналитик для трейдеров",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
-    docs_url="/api/docs",      # URL для Swagger UI
-    redoc_url="/api/redoc"     # URL для ReDoc
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 from app.api.endpoints import agent as agent_router
 from app.api.endpoints import agent_settings as agent_settings_router
 from app.api.endpoints import dashboards as dashboards_router
