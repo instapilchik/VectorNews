@@ -141,22 +141,23 @@ class NewsService:
             query: str = None,
             time_range: str = "1d",
             sectors: List[str] = None,
-            limit: int = 50
+            limit: int = 50,
+            offset: int = 0
     ) -> List[NewsPost]:
-        """Поиск новостей с фильтрацией"""
+        """Поиск новостей с фильтрацией и пагинацией"""
         async with async_session() as session:
-            # Определяем временной диапазон
             time_delta = {
                 "1h": timedelta(hours=1),
                 "6h": timedelta(hours=6),
                 "1d": timedelta(days=1),
                 "3d": timedelta(days=3),
-                "1w": timedelta(weeks=1)
+                "1w": timedelta(weeks=1),
+                "2w": timedelta(weeks=2),
+                "1m": timedelta(days=30)
             }.get(time_range, timedelta(days=1))
 
             since_date = datetime.utcnow() - time_delta
 
-            # Базовый запрос
             stmt = select(NewsPost).where(
                 and_(
                     NewsPost.published_at >= since_date,
@@ -164,7 +165,6 @@ class NewsService:
                 )
             )
 
-            # Фильтр по тексту
             if query:
                 stmt = stmt.where(
                     or_(
@@ -173,11 +173,56 @@ class NewsService:
                     )
                 )
 
-            # Фильтр по секторам
             if sectors:
                 stmt = stmt.where(NewsPost.sector.in_(sectors))
 
-            stmt = stmt.order_by(desc(NewsPost.importance_score), desc(NewsPost.published_at)).limit(limit)
+            stmt = stmt.order_by(
+                desc(NewsPost.importance_score),
+                desc(NewsPost.published_at)
+            ).offset(offset).limit(limit)
 
             result = await session.execute(stmt)
             return result.scalars().all()
+
+    async def count_news(
+            self,
+            query: str = None,
+            time_range: str = "1d",
+            sectors: List[str] = None
+    ) -> int:
+        """Подсчёт количества новостей с фильтрацией (для пагинации)."""
+        from sqlalchemy import func
+
+        async with async_session() as session:
+            time_delta = {
+                "1h": timedelta(hours=1),
+                "6h": timedelta(hours=6),
+                "1d": timedelta(days=1),
+                "3d": timedelta(days=3),
+                "1w": timedelta(weeks=1),
+                "2w": timedelta(weeks=2),
+                "1m": timedelta(days=30)
+            }.get(time_range, timedelta(days=1))
+
+            since_date = datetime.utcnow() - time_delta
+
+            stmt = select(func.count(NewsPost.id)).where(
+                and_(
+                    NewsPost.published_at >= since_date,
+                    NewsPost.is_spam == False
+                )
+            )
+
+            if query:
+                stmt = stmt.where(
+                    or_(
+                        NewsPost.original_text.ilike(f"%{query}%"),
+                        NewsPost.processed_text.ilike(f"%{query}%")
+                    )
+                )
+
+            if sectors:
+                stmt = stmt.where(NewsPost.sector.in_(sectors))
+
+            result = await session.execute(stmt)
+            return result.scalar()

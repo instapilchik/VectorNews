@@ -186,18 +186,26 @@ async def start_hot_topics_calculation(user=Depends(get_user_from_header)):
 @app.get("/api/news/recent")
 async def get_recent_news(
         limit: int = 20,
+        offset: int = 0,
         hours: int = 24,
         user=Depends(get_user_from_header)
 ):
-    """Получение последних новостей"""
+    """Получение последних новостей с пагинацией"""
     from app.services.news_service import NewsService
 
     try:
         news_service = NewsService()
         time_range = f"{hours}h" if hours <= 24 else f"{hours // 24}d"
-        news = await news_service.search_news(time_range=time_range, limit=limit)
+
+        news = await news_service.search_news(
+            time_range=time_range, limit=limit, offset=offset
+        )
+        total = await news_service.count_news(time_range=time_range)
 
         return {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
             "count": len(news),
             "news": [
                 {
