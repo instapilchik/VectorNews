@@ -8,6 +8,7 @@ from qdrant_client.http import models as qdrant_models
 
 from app.services.vector_db_service import vector_db_service
 from app.services.embedding_service import embedding_service
+from app.services.reranker_service import reranker_service
 from app.services.news_service import NewsService
 from app.models.news import NewsPost
 from app.services.llm_service import llm_service
@@ -36,11 +37,13 @@ class AgentService:
         self.news_service = NewsService()
         self.vector_db = vector_db_service
         self.embedding = embedding_service
+        self.reranker = reranker_service
         self.llm_service = llm_service
         self.model_selector = model_selector
-        self.search_limit = 50  # Сколько кандидатов ищем в векторной базе
-        self.context_news_count = 10  # Сколько новостей даем в контекст LLM
-        self.final_sources_count = 5  # Сколько источников показываем пользователю
+        self.search_limit = 50
+        self.rerank_top_k = 15  # Сколько оставляем после reranking
+        self.context_news_count = 10
+        self.final_sources_count = 5
         self.settings_service = agent_settings_service
 
     async def _search_relevant_news(self, structured_query: StructuredQuerySchema, settings: AgentSettingsSchema, override_filters: Optional[dict] = None) -> List[NewsPost]:
@@ -110,6 +113,25 @@ class AgentService:
 
         # 4. Получаем полные данные из PostgreSQL
         return await self.news_service.get_news_by_ids(news_ids)
+
+    def _rerank_news(self, query: str, news_items: List[NewsPost]) -> List[NewsPost]:
+        """Переранжирование новостей cross-encoder-ом для более точной релевантности."""
+        if len(news_items) <= self.context_news_count:
+            return news_items
+
+        try:
+            documents = [
+                item.summary or item.original_text[:500]
+                for item in news_items
+            ]
+            ranked = self.reranker.rerank(query, documents, top_k=self.rerank_top_k)
+
+            reranked_items = [news_items[idx] for idx, score in ranked]
+            logger.info(f"Reranked {len(news_items)} -> {len(reranked_items)} items")
+            return reranked_items
+        except Exception as e:
+            logger.warning(f"Reranking failed, using original order: {e}")
+            return news_items
 
     async def _synthesize_answer(self, query: str, news_context: List[NewsPost], settings: AgentSettingsSchema) -> str:
         """
@@ -206,6 +228,9 @@ class AgentService:
         news_items = await self._search_relevant_news(structured_query, settings, override_filters)
         if not news_items:
             return "К сожалению, по вашему запросу не удалось найти релевантных новостей за указанный период.", []
+
+        # --- Шаг 2.5: Reranking — переранжируем cross-encoder-ом ---
+        news_items = self._rerank_news(query, news_items)
 
         # --- Шаг 3: Синтез ответа на основе найденного контекста ---
         context_for_synthesis = news_items[:self.context_news_count]
