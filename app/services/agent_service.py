@@ -114,6 +114,36 @@ class AgentService:
         # 4. Получаем полные данные из PostgreSQL
         return await self.news_service.get_news_by_ids(news_ids)
 
+    def _check_relevance(self, query: str, news_items: List[NewsPost]) -> bool:
+        """
+        Relevance gate: проверяем, есть ли среди найденных новостей
+        достаточно релевантные для формирования ответа.
+        Используем reranker scores — если лучший результат ниже порога, данных недостаточно.
+        """
+        if not news_items:
+            return False
+
+        try:
+            top_docs = [
+                item.summary or item.original_text[:500]
+                for item in news_items[:5]
+            ]
+            ranked = self.reranker.rerank(query, top_docs, top_k=3)
+
+            if not ranked:
+                return False
+
+            best_score = ranked[0][1]
+            logger.info(f"Relevance gate: best reranker score = {best_score:.4f}")
+
+            # Порог подобран эмпирически для ms-marco cross-encoder
+            # Ниже -2.0 — контент совсем не по теме
+            return best_score > -2.0
+
+        except Exception as e:
+            logger.warning(f"Relevance gate check failed: {e}")
+            return True  # При ошибке пропускаем — лучше ответить, чем промолчать
+
     def _rerank_news(self, query: str, news_items: List[NewsPost]) -> List[NewsPost]:
         """Переранжирование новостей cross-encoder-ом для более точной релевантности."""
         if len(news_items) <= self.context_news_count:
@@ -155,7 +185,6 @@ class AgentService:
         )
 
         # 3. Формируем промпт для LLM
-        # --- Персонализированный системный промпт ---
         system_prompt = f"""
         Ты - AI-новостной аналитик для трейдеров по имени {settings.agent_name}.
 
@@ -167,16 +196,9 @@ class AgentService:
         Твои общие правила:
         - Отвечай структурированно, ясно и по делу.
         - Не выдумывай информацию, которой нет в источниках.
+        - Если в источниках нет ответа на вопрос, честно скажи об этом.
         - Не давай никаких финансовых советов или прогнозов.
         """
-
-        # system_prompt = """
-        # Ты - AI-новостной аналитик для трейдеров. Твоя задача - отвечать на вопросы пользователя, строго основываясь на предоставленных новостных источниках.
-        # - Отвечай структурированно, ясно и по делу.
-        # - Не выдумывай информацию, которой нет в источниках.
-        # - Если в источниках нет ответа на вопрос, честно скажи об этом.
-        # - Не давай никаких финансовых советов или прогнозов. Твоя роль - анализ и интерпретация новостей.
-        # """
 
         user_prompt = f"""
         Проанализируй следующие новостные источники и дай развернутый ответ на мой вопрос.
@@ -231,6 +253,15 @@ class AgentService:
 
         # --- Шаг 2.5: Reranking — переранжируем cross-encoder-ом ---
         news_items = self._rerank_news(query, news_items)
+
+        # --- Шаг 2.6: Relevance gate — проверяем достаточность данных ---
+        if not override_filters and not self._check_relevance(query, news_items):
+            logger.info(f"Relevance gate: insufficient data for query '{query}'")
+            return (
+                "По вашему запросу не удалось найти достаточно релевантной информации в новостной базе. "
+                "Попробуйте переформулировать вопрос или расширить временной диапазон.",
+                []
+            )
 
         # --- Шаг 3: Синтез ответа на основе найденного контекста ---
         context_for_synthesis = news_items[:self.context_news_count]
