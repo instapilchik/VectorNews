@@ -1,4 +1,4 @@
-
+import json
 import logging
 from typing import List, Tuple, Optional
 from datetime import datetime, timedelta, timezone
@@ -15,6 +15,7 @@ from app.services.llm_service import llm_service
 from app.ai.models import model_selector, TaskType, ComplexityLevel
 from app.ai.schemas import StructuredQuerySchema
 from app.services.agent_settings_service import agent_settings_service
+from app.services.cache_service import cache_service
 from app.schemas.agent_settings import AgentSettingsSchema
 
 
@@ -45,6 +46,8 @@ class AgentService:
         self.context_news_count = 10
         self.final_sources_count = 5
         self.settings_service = agent_settings_service
+        self.cache = cache_service
+        self.cache_ttl = 300  # 5 минут для ответов агента
 
     async def _search_relevant_news(self, structured_query: StructuredQuerySchema, settings: AgentSettingsSchema, override_filters: Optional[dict] = None) -> List[NewsPost]:
         """
@@ -230,10 +233,25 @@ class AgentService:
         logger.info(f"Synthesized answer generated successfully.")
         return answer.strip()
 
+    def _build_cache_key(self, query: str, user_id: str, override_filters: Optional[dict]) -> str:
+        """Формирует уникальный ключ кеша из параметров запроса."""
+        parts = [query.strip().lower(), user_id]
+        if override_filters:
+            parts.append(json.dumps(override_filters, sort_keys=True))
+        return "|".join(parts)
+
     async def process_query(self, query: str, user_id: str, override_filters: Optional[dict] = None) -> Tuple[str, List[NewsSource]]:
         """
         "умный" пайплайн обработки запроса.
         """
+        # --- Проверяем кеш ---
+        cache_key = self._build_cache_key(query, user_id, override_filters)
+        cached = await self.cache.get("agent", cache_key)
+        if cached:
+            logger.info(f"Cache hit for query: {query[:50]}...")
+            sources = [NewsSource(**s) for s in cached["sources"]]
+            return cached["answer"], sources
+
         # --- Шаг 0: Получение настроек пользователя ---
         settings = await self.settings_service.get_settings(user_id)
         logger.info(f"Using settings for user {user_id}: {settings.model_dump_json(indent=2)}")
@@ -279,6 +297,12 @@ class AgentService:
             )
             for item in news_items[:self.final_sources_count]  # Ограничиваем количество источников для показа
         ]
+
+        # --- Кешируем результат ---
+        await self.cache.set("agent", cache_key, {
+            "answer": generated_answer,
+            "sources": [vars(s) for s in sources]
+        }, ttl=self.cache_ttl)
 
         return generated_answer, sources
 
