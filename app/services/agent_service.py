@@ -166,9 +166,38 @@ class AgentService:
             logger.warning(f"Reranking failed, using original order: {e}")
             return news_items
 
+    def _build_format_instructions(self, settings: AgentSettingsSchema) -> str:
+        """Формирует инструкции по формату ответа в зависимости от стиля пользователя."""
+        style = settings.information_style.value
+        depth = settings.analysis_depth.value
+
+        if style == "только факты":
+            return (
+                "ФОРМАТ ОТВЕТА:\n"
+                "- Начни с одного предложения-вывода.\n"
+                "- Далее перечисли ключевые факты маркированным списком.\n"
+                "- Не добавляй рассуждения и личные оценки."
+            )
+        elif style == "развернутые анализы" or depth == "экспертный уровень":
+            return (
+                "ФОРМАТ ОТВЕТА:\n"
+                "- Начни с краткого резюме (1-2 предложения).\n"
+                "- Затем раскрой тему подробно, группируя информацию по смысловым блокам.\n"
+                "- Покажи связи между событиями и возможные последствия.\n"
+                "- Завершай кратким итогом."
+            )
+        else:
+            # "краткие сводки" — дефолт
+            return (
+                "ФОРМАТ ОТВЕТА:\n"
+                "- Начни с краткого резюме (1-2 предложения).\n"
+                "- Далее ключевые моменты маркированным списком.\n"
+                "- Будь лаконичен, не превышай 5-7 пунктов."
+            )
+
     async def _synthesize_answer(self, query: str, news_context: List[NewsPost], settings: AgentSettingsSchema) -> str:
         """
-        Шаг 2: Генерирует связный ответ на основе найденных новостей с помощью LLM.
+        Генерирует связный ответ на основе найденных новостей с помощью LLM.
         """
         if not news_context:
             return "Не удалось найти достаточно информации для ответа на ваш вопрос."
@@ -177,7 +206,6 @@ class AgentService:
         context_str = ""
         for i, news in enumerate(news_context, 1):
             context_str += f"Источник {i} (ID: {news.id}, Опубликовано: {news.published_at.strftime('%Y-%m-%d %H:%M')}):\n"
-            # Приоритет отдаем summary, если оно есть, т.к. оно более емкое
             text_to_use = news.summary if news.summary else news.original_text
             context_str += f'"{text_to_use}"\n\n'
 
@@ -187,33 +215,35 @@ class AgentService:
             complexity=ComplexityLevel.MEDIUM
         )
 
-        # 3. Формируем промпт для LLM
-        system_prompt = f"""
-        Ты - AI-новостной аналитик для трейдеров по имени {settings.agent_name}.
+        # 3. Формируем промпт с инструкциями по формату
+        format_instructions = self._build_format_instructions(settings)
 
-        Твои инструкции по общению с пользователем:
-        - Стиль подачи информации: `{settings.information_style.value}`.
-        - Тон общения: `{settings.communication_tone.value}`.
-        - Глубина анализа: `{settings.analysis_depth.value}`.
+        system_prompt = f"""Ты - AI-новостной аналитик для трейдеров по имени {settings.agent_name}.
 
-        Твои общие правила:
-        - Отвечай структурированно, ясно и по делу.
-        - Не выдумывай информацию, которой нет в источниках.
-        - Если в источниках нет ответа на вопрос, честно скажи об этом.
-        - Не давай никаких финансовых советов или прогнозов.
-        """
+Твои инструкции по общению с пользователем:
+- Стиль подачи информации: {settings.information_style.value}.
+- Тон общения: {settings.communication_tone.value}.
+- Глубина анализа: {settings.analysis_depth.value}.
 
-        user_prompt = f"""
-        Проанализируй следующие новостные источники и дай развернутый ответ на мой вопрос.
+{format_instructions}
 
-        НОВОСТНЫЕ ИСТОЧНИКИ:
-        ---
-        {context_str}
-        ---
+Твои общие правила:
+- Отвечай структурированно, ясно и по делу.
+- Не выдумывай информацию, которой нет в источниках.
+- Если в источниках нет ответа на вопрос, честно скажи об этом.
+- Не давай никаких финансовых советов или прогнозов.
+- При необходимости указывай номера источников в скобках, например: (Источник 1)."""
 
-        МОЙ ВОПРОС:
-        "{query}"
-        """
+        user_prompt = f"""Проанализируй следующие новостные источники и дай развернутый ответ на мой вопрос.
+
+НОВОСТНЫЕ ИСТОЧНИКИ:
+---
+{context_str}
+---
+
+МОЙ ВОПРОС:
+"{query}"
+"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -225,8 +255,8 @@ class AgentService:
         response = await self.llm_service.client.complete(
             model=model_name,
             messages=messages,
-            max_tokens=1500,  # Увеличим лимит для развернутого ответа
-            temperature=0.3  # Низкая температура для более фактического ответа
+            max_tokens=1500,
+            temperature=0.3
         )
 
         answer = response["choices"][0]["message"]["content"]
