@@ -135,6 +135,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.env
 app/.env
 .envrc
 .venv
@@ -173,7 +174,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # Abstra
 # Abstra is an AI-powered process automation framework.
@@ -207,14 +208,8 @@ marimo/_lsp/
 __marimo__/
 
 
-.session
-.bak
-.dir
-.dat
-celerybeat-schedule.dat
-/ai_news_parser.session
-/.session
-/celerybeat-schedule.bak
-/celerybeat-schedule.dir
-/app/news_parser_session.session
-/app/ai_news_parser.session
+# Telethon session files
+*.session
+
+# Celery schedule files
+celerybeat-schedule*
