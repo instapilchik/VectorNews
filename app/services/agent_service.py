@@ -91,10 +91,11 @@ class AgentService:
                     )
                 )
 
-            # Шаг 2.2: Определяем временной диапазон. Настройки пользователя в приоритете.
-            time_days = settings.historical_context_days if settings else structured_query.time_range_days
+            # Шаг 2.2: Определяем временной диапазон. LLM анализирует запрос и учитывает настройки пользователя.
+            time_days = structured_query.time_range_days
 
             start_date = datetime.now(timezone.utc) - timedelta(days=time_days)
+
             qdrant_filter_conditions.append(
                 qdrant_models.FieldCondition(
                     key="published_at",

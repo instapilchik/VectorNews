@@ -36,9 +36,12 @@ class LLMService:
         schema_json_string = json.dumps(StructuredQuerySchema.model_json_schema(), ensure_ascii=False, indent=2)
 
         # --- КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ ---
-        user_context_prompt = ""
-        if settings and settings.focus_interests:
-            user_context_prompt = f"\nКОНТЕКСТ ПОЛЬЗОВАТЕЛЯ: Его основные интересы - {settings.focus_interests}. Учитывай это при переформулировании общего запроса в более конкретный."
+        user_context_parts = []
+        if settings:
+            if settings.focus_interests:
+                user_context_parts.append(f"Его основные интересы: {settings.focus_interests}. Учитывай это при переформулировании общего запроса в более конкретный.")
+            user_context_parts.append(f"Предпочтительная глубина поиска: {settings.historical_context_days} дней. Используй это значение для time_range_days, если пользователь НЕ указал конкретный период в запросе.")
+        user_context_prompt = f"\nКОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:\n" + "\n".join(f"- {p}" for p in user_context_parts) if user_context_parts else ""
 
         return f"""Ты - AI-помощник для анализа запросов к новостной базе. Твоя задача - превратить запрос пользователя в структурированный JSON-объект для поиска.
 
