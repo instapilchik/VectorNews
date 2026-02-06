@@ -62,7 +62,7 @@ async def _generate_topic_title(news_items) -> str:
 
     try:
         response = await llm_service.client.complete(
-            model='google/gemini-2.5-flash-lite',
+            model='google/gemini-3-flash-preview',
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=30,
             temperature=0.3

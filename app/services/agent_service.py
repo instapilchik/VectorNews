@@ -168,8 +168,8 @@ class AgentService:
 
     def _build_format_instructions(self, settings: AgentSettingsSchema) -> str:
         """Формирует инструкции по формату ответа в зависимости от стиля пользователя."""
-        style = settings.information_style.value
-        depth = settings.analysis_depth.value
+        style = settings.information_style
+        depth = settings.analysis_depth
 
         if style == "только факты":
             return (
@@ -221,9 +221,9 @@ class AgentService:
         system_prompt = f"""Ты - AI-новостной аналитик для трейдеров по имени {settings.agent_name}.
 
 Твои инструкции по общению с пользователем:
-- Стиль подачи информации: {settings.information_style.value}.
-- Тон общения: {settings.communication_tone.value}.
-- Глубина анализа: {settings.analysis_depth.value}.
+- Стиль подачи информации: {settings.information_style}.
+- Тон общения: {settings.communication_tone}.
+- Глубина анализа: {settings.analysis_depth}.
 
 {format_instructions}
 

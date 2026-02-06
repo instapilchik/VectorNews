@@ -30,8 +30,8 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse, summary="Отправить сообщение ИИ-агенту")
 @limiter.limit("20/minute")
 async def handle_chat(
-    request: ChatRequest,
-    req: Request,
+    request: Request,
+    body: ChatRequest,
     user_info=Depends(get_user_from_header)
 ):
     """
@@ -39,19 +39,13 @@ async def handle_chat(
     Принимает запрос пользователя, использует его ID для персонализации
     и возвращает сгенерированный, персонализированный ответ и источники.
     """
-    if not request.query:
-        raise HTTPException(status_code=400, detail="Query cannot be empty.")
-
     try:
-        # 1. Извлекаем user_id из информации, полученной от get_user_from_header
         user_id = user_info.get("user_id")
         if not user_id:
-            # Это важная проверка безопасности
             raise HTTPException(status_code=401, detail="Could not identify user from token.")
 
-        # 2. Передаем и query, и user_id в сервис
         answer, sources = await agent_service.process_query(
-            query=request.query,
+            query=body.query,
             user_id=user_id
         )
 

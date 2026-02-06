@@ -27,7 +27,7 @@ def process_unprocessed_news_dispatcher():
     """Находит необработанные новости и запускает для каждой конвейер обработки."""
     logger.info("Dispatcher started: Looking for unprocessed news.")
     news_service = NewsService()
-    unprocessed_news_list = asyncio.run(news_service.get_unprocessed_news(limit=50))
+    unprocessed_news_list = asyncio.run(news_service.get_unprocessed_news(limit=501))
 
     if not unprocessed_news_list:
         logger.info("No new news to process.")
