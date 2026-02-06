@@ -56,11 +56,24 @@ class NewsService:
                     logger.warning(f"News post with id {news_id} not found for metadata update.")
                     return
 
+                # Классификация контента
+                news_post.is_spam = metadata.is_spam
+                news_post.is_advertisement = metadata.is_advertisement
+                news_post.is_humor = metadata.is_humor
+                news_post.is_financial_relevant = metadata.is_financial_relevant
+
+                # Основные метаданные
                 news_post.category = metadata.category.value
+                news_post.sector = metadata.sector.value
+                news_post.sentiment = metadata.sentiment.value
+                news_post.importance_score = metadata.importance_score
+                news_post.classification_confidence = metadata.classification_confidence
+
+                # Извлечённый контент
                 news_post.summary = metadata.summary
                 news_post.keywords = metadata.keywords
+                news_post.tags = metadata.tags
                 news_post.entities = metadata.entities.model_dump()
-                news_post.importance_score = metadata.importance_score
 
                 await session.commit()
                 logger.info(f"Successfully updated metadata for news_id: {news_id}")
