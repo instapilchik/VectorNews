@@ -25,7 +25,8 @@ class LLMService:
         Твои правила:
         - Не добавляй никаких комментариев или текста вне JSON.
         - Все поля обязательны.
-        - Значения должны быть на русском языке.
+        - Значения enum-полей (category, sector, sentiment) — строго из списка допустимых значений в схеме.
+        - Текстовые значения (summary, keywords, tags) — на русском языке.
         - Если информации нет — ставь пустой массив или null, но поле должно присутствовать.
         """
 
@@ -36,23 +37,27 @@ class LLMService:
         schema_json_string = json.dumps(StructuredQuerySchema.model_json_schema(), ensure_ascii=False, indent=2)
 
         # --- КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ ---
-        user_context_prompt = ""
-        if settings and settings.focus_interests:
-            user_context_prompt = f"\nКОНТЕКСТ ПОЛЬЗОВАТЕЛЯ: Его основные интересы - {settings.focus_interests}. Учитывай это при переформулировании общего запроса в более конкретный."
+        user_context_parts = []
+        if settings:
+            if settings.focus_interests:
+                user_context_parts.append(f"Его основные интересы: {settings.focus_interests}. Учитывай это при переформулировании общего запроса в более конкретный.")
+            user_context_parts.append(f"Предпочтительная глубина поиска: {settings.historical_context_days} дней. Используй это значение для time_range_days, если пользователь НЕ указал конкретный период в запросе.")
+        user_context_prompt = f"\nКОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:\n" + "\n".join(f"- {p}" for p in user_context_parts) if user_context_parts else ""
 
-        return f"""
-        Ты - AI-помощник для анализа запросов к новостной базе. Твоя задача - превратить нечеткий запрос пользователя в структурированный JSON-объект для поиска.
-        Доступные категории для поиска: {categories_list}.
-        Проанализируй запрос и определи наиболее подходящие параметры поиска.
-        В поле `search_query` верни запрос, очищенный от мусора и переформулированный для наилучшего семантического поиска.
-        
-        {user_context_prompt}
+        return f"""Ты - AI-помощник для анализа запросов к новостной базе. Твоя задача - превратить запрос пользователя в структурированный JSON-объект для поиска.
 
-        Строго придерживайся следующей JSON Schema для твоего ответа:
-        ```json
-        {schema_json_string}
-        ```
-        """
+Доступные категории: {categories_list}.
+
+Правила:
+- `search_query`: переформулируй запрос для семантического поиска, убери мусор.
+- `filter_categories`: укажи 1-3 конкретные категории, ТОЛЬКО если запрос явно про конкретную тему. Для широких запросов ("новости за неделю", "что нового", "топ новостей", "сводка") — верни null, чтобы искать по всем категориям.
+- `time_range_days`: определи глубину поиска (1, 3, 7, 14, 30).
+{user_context_prompt}
+
+Строго придерживайся следующей JSON Schema:
+```json
+{schema_json_string}
+```"""
     async def _extract_structured_data(
             self,
             system_prompt: str,

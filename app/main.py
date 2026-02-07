@@ -9,12 +9,14 @@ if dotenv_path.exists():
 else:
     print(f"Внимание: файл .env не найден в {dotenv_path}")
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from contextlib import asynccontextmanager
 import logging
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import init_db, check_db_connection, check_redis_connection
-from app.api.deps import get_user_from_header
+from app.api.deps import get_user_from_header, limiter
 
 # Настройка логирования
 logging.basicConfig(
@@ -61,11 +63,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI News Manager",
     description="Персональный новостной аналитик для трейдеров",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
-    docs_url="/api/docs",      # URL для Swagger UI
-    redoc_url="/api/redoc"     # URL для ReDoc
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 from app.api.endpoints import agent as agent_router
 from app.api.endpoints import agent_settings as agent_settings_router
 from app.api.endpoints import dashboards as dashboards_router
@@ -156,7 +161,7 @@ async def start_unprocessed(user=Depends(get_user_from_header)):
     try:
         task = process_unprocessed_news_dispatcher.delay()
         return {
-            "message": "Uprocess fill started",
+            "message": "Processing unprocessed news started",
             "task_id": task.id
         }
     except Exception as e:
@@ -181,18 +186,26 @@ async def start_hot_topics_calculation(user=Depends(get_user_from_header)):
 @app.get("/api/news/recent")
 async def get_recent_news(
         limit: int = 20,
+        offset: int = 0,
         hours: int = 24,
         user=Depends(get_user_from_header)
 ):
-    """Получение последних новостей"""
+    """Получение последних новостей с пагинацией"""
     from app.services.news_service import NewsService
 
     try:
         news_service = NewsService()
         time_range = f"{hours}h" if hours <= 24 else f"{hours // 24}d"
-        news = await news_service.search_news(time_range=time_range, limit=limit)
+
+        news = await news_service.search_news(
+            time_range=time_range, limit=limit, offset=offset
+        )
+        total = await news_service.count_news(time_range=time_range)
 
         return {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
             "count": len(news),
             "news": [
                 {
@@ -200,7 +213,7 @@ async def get_recent_news(
                     "source": item.source_channel,
                     "text": item.original_text[:200] + "..." if len(item.original_text) > 200 else item.original_text,
                     "published_at": item.published_at,
-                    "category": item.estimated_category,
+                    "category": item.category or item.estimated_category,
                     "views": item.views_count,
                     "tg_link": item.tg_link
                 }

@@ -37,8 +37,7 @@ class NewsPost(Base):
     is_humor = Column(Boolean, default=False)
     is_financial_relevant = Column(Boolean, default=True)
 
-    # --- НОВЫЕ ПОЛЯ ДЛЯ ОБОГАЩЕНИЯ ---
-    # TODO: навести порядка, убрать легаси
+    # --- Поля обогащения (заполняются LLM-классификатором) ---
     category = Column(String, nullable=True, index=True)
     summary = Column(Text, nullable=True)
     keywords = Column(JSONB, nullable=True)
@@ -51,7 +50,7 @@ class NewsPost(Base):
     classification_confidence = Column(Float, nullable=True)
     tags = Column(JSONB, nullable=True)  # ["рубль", "нефть", "санкции"]
 
-    # Базовая категория (из твоего парсера)
+    # Базовая категория из парсера (keyword-matching при импорте из TG)
     estimated_category = Column(String(100), nullable=True)
     language = Column(String(10), default='ru')
 

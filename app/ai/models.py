@@ -42,7 +42,7 @@ MODEL_CONFIG = {
         #     "complexity": [ComplexityLevel.SIMPLE, ComplexityLevel.MEDIUM],
         #     "speed": "fast"
         # },
-        "google/gemini-2.5-flash-lite": {
+        "google/gemini-3-flash-preview": {
             "cost_per_1k_input": 0.0001,
             "cost_per_1k_output": 0.0004,
             "max_tokens": 4096,
@@ -55,7 +55,7 @@ MODEL_CONFIG = {
 
     # Мощные модели (для дашбордов и сложной аналитики)
     "heavy_models": {
-        "anthropic/claude-sonnet-4": {
+        "anthropic/claude-sonnet-4.5": {
             "cost_per_1k_input": 0.003,
             "cost_per_1k_output": 0.015,
             "max_tokens": 200000,
@@ -95,7 +95,7 @@ class ModelSelector:
             complexity: ComplexityLevel = ComplexityLevel.SIMPLE,
             prefer_speed: bool = False,
             prefer_cost: bool = True,
-            max_budget_per_1k: float = 0.01
+            max_budget_per_1k: float = 0.02
     ) -> str:
         """
         Выбор оптимальной модели для задачи
@@ -148,15 +148,15 @@ class ModelSelector:
     def _get_fallback_model(self, task_type: TaskType) -> str:
         """Fallback модель по умолчанию"""
         fallback_map = {
-            TaskType.CHAT: "anthropic/claude-sonnet-4",
-            TaskType.DASHBOARD_GENERATION: "anthropic/claude-sonnet-4",
-            TaskType.PERSONALIZATION: "google/gemini-2.5-flash-lite",
-            TaskType.NEWS_CLASSIFICATION: "google/gemini-2.5-flash-lite",
-            TaskType.FILTERING: "google/gemini-2.5-flash-lite",
-            TaskType.ANALYSIS: "anthropic/claude-sonnet-4"
+            TaskType.CHAT: "anthropic/claude-sonnet-4.5",
+            TaskType.DASHBOARD_GENERATION: "anthropic/claude-sonnet-4.5",
+            TaskType.PERSONALIZATION: "google/gemini-3-flash-preview",
+            TaskType.NEWS_CLASSIFICATION: "google/gemini-3-flash-preview",
+            TaskType.FILTERING: "google/gemini-3-flash-preview",
+            TaskType.ANALYSIS: "anthropic/claude-sonnet-4.5"
         }
 
-        return fallback_map.get(task_type, "anthropic/claude-3-haiku")
+        return fallback_map.get(task_type, "anthropic/claude-sonnet-4.5")
 
     def get_model_info(self, model_name: str) -> Optional[Dict]:
         """Получение информации о модели"""

@@ -1,9 +1,9 @@
 import logging
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from typing import List, Optional
 
 from app.ai.schemas import NewsCategory
-from app.api.deps import get_user_from_header
+from app.api.deps import get_user_from_header, limiter
 from app.api.endpoints.agent import ChatResponse, NewsSourceResponse
 from app.services.agent_service import agent_service
 from app.services.news_service import NewsService
@@ -41,7 +41,9 @@ class NewsCard(BaseModel):
     response_model=List[NewsCard],
     summary="Получить новости по тематике"
 )
+@limiter.limit("30/minute")
 async def get_thematic_dashboard(
+        request: Request,
         category: NewsCategory = Query(..., description="Категория для фильтрации"),
         limit: int = Query(20, ge=5, le=50),
         user_info=Depends(get_user_from_header)
@@ -76,7 +78,8 @@ async def get_thematic_dashboard(
     response_model=ChatResponse,
     summary="Сводка 'Главное за день'"
 )
-async def get_daily_briefing(user_info=Depends(get_user_from_header)):
+@limiter.limit("10/minute")
+async def get_daily_briefing(request: Request, user_info=Depends(get_user_from_header)):
     """
     Генерирует персонализированную сводку ключевых новостей за последние 24 часа.
     """
@@ -101,7 +104,8 @@ async def get_daily_briefing(user_info=Depends(get_user_from_header)):
     response_model=List[HotTopic],
     summary="Дашборд 'Горячие темы'"
 )
-async def get_hot_topics(user_info=Depends(get_user_from_header)):
+@limiter.limit("30/minute")
+async def get_hot_topics(request: Request, user_info=Depends(get_user_from_header)):
     """
     Возвращает список самых обсуждаемых тем, рассчитанный в фоновом режиме.
     """
@@ -113,6 +117,3 @@ async def get_hot_topics(user_info=Depends(get_user_from_header)):
     except Exception as e:
         logger.error(f"Error retrieving hot topics from cache: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve hot topics.")
-
-# --- ЗАГЛУШКИ ДЛЯ СЛЕДУЮЩИХ ЭТАПОВ ---
-# Здесь будут эндпоинты /daily-briefing, /weekly-briefing, /hot-topics

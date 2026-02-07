@@ -101,7 +101,6 @@ def generate_vector_embedding(self, news_id: int):
         vector = embedding_service.get_embedding(text_to_embed)
 
         # 2. Готовим payload для фильтрации в Qdrant
-        # TODO: Все ли важные поля payload мы прописали? Изучить потом
         payload = {
             "source_channel": news_item.source_channel,
             "published_at_iso": news_item.published_at.isoformat(),
