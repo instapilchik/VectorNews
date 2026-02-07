@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 from app.config import settings
 
 celery_app = Celery(
@@ -7,13 +8,10 @@ celery_app = Celery(
     backend=settings.celery_result_backend,
     include=[
         "app.tasks.telegram_parser",
-        "app.tasks.news_classifier",  # Для этапа 3
+        "app.tasks.news_classifier",
         "app.tasks.dashboards"
     ]
 )
-# Если мы в режиме разработки, включаем "eager" режим
-if settings.environment == "development":
-    celery_app.conf.task_always_eager = True
 
 # Конфигурация Celery
 celery_app.conf.update(
@@ -22,19 +20,27 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    # Расписание задач
-    beat_schedule={
+)
+
+# В режиме разработки включаем "eager" режим, расписание Beat не нужно
+if settings.environment == "development":
+    celery_app.conf.task_always_eager = True
+else:
+    celery_app.conf.beat_schedule = {
         "parse-telegram-channels": {
             "task": "app.tasks.telegram_parser.parse_all_channels",
-            "schedule": settings.parse_interval_minutes * 60.0,  # в секундах
+            "schedule": settings.parse_interval_minutes * 60.0,  # каждые 30 мин (по умолчанию)
         },
         "classify-news-batch": {
-            "task": "app.tasks.news_classifier.process_unprocessed_news_dispatcher", # TODO: проверить
-            "schedule": 60.0,  # каждые 5 минут (заглушка для этапа 3)
+            "task": "app.tasks.news_classifier.process_unprocessed_news_dispatcher",
+            "schedule": 900.0,  # каждые 15 минут
         },
         "calculate-hot-topics": {
             "task": "app.tasks.dashboards.calculate_hot_topics",
-            "schedule": 3600.0,  # каждый час
+            "schedule": 7200.0,  # каждые 2 часа
         },
-    },
-)
+        "cleanup-redis-cache": {
+            "task": "app.tasks.dashboards.cleanup_stale_cache",
+            "schedule": crontab(hour=3, minute=0),  # ежедневно в 03:00 UTC
+        },
+    }

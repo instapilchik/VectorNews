@@ -98,6 +98,68 @@ class TestRelevanceGate:
         assert agent_service._check_relevance("query", items) is False
 
 
+class TestBuildCacheKey:
+    def test_basic_key(self, agent_service):
+        """Ключ кеша формируется из query и user_id."""
+        key = agent_service._build_cache_key("Что с рублем?", "user1", None)
+        assert "что с рублем?" in key
+        assert "user1" in key
+
+    def test_strips_and_lowercases(self, agent_service):
+        """Query нормализуется: trim + lowercase."""
+        key1 = agent_service._build_cache_key("  Test  ", "u1", None)
+        key2 = agent_service._build_cache_key("test", "u1", None)
+        assert key1 == key2
+
+    def test_different_users_different_keys(self, agent_service):
+        """Разные пользователи — разные ключи."""
+        key1 = agent_service._build_cache_key("query", "user1", None)
+        key2 = agent_service._build_cache_key("query", "user2", None)
+        assert key1 != key2
+
+    def test_with_override_filters(self, agent_service):
+        """При наличии фильтров они включаются в ключ."""
+        key_no_filter = agent_service._build_cache_key("q", "u", None)
+        key_with_filter = agent_service._build_cache_key("q", "u", {"time_range_days": 7})
+        assert key_no_filter != key_with_filter
+
+    def test_filter_order_independent(self, agent_service):
+        """Порядок ключей фильтра не влияет на результат (sort_keys=True)."""
+        key1 = agent_service._build_cache_key("q", "u", {"a": 1, "b": 2})
+        key2 = agent_service._build_cache_key("q", "u", {"b": 2, "a": 1})
+        assert key1 == key2
+
+
+class TestBuildFormatInstructions:
+    def test_facts_only_style(self, agent_service):
+        """Стиль 'только факты' — краткий формат без рассуждений."""
+        from app.schemas.agent_settings import AgentSettingsSchema
+        settings = AgentSettingsSchema(information_style="только факты")
+        result = agent_service._build_format_instructions(settings)
+        assert "факты" in result.lower() or "маркированным списком" in result
+
+    def test_detailed_style(self, agent_service):
+        """Стиль 'развернутые анализы' — подробный формат."""
+        from app.schemas.agent_settings import AgentSettingsSchema
+        settings = AgentSettingsSchema(information_style="развернутые анализы")
+        result = agent_service._build_format_instructions(settings)
+        assert "подробно" in result.lower() or "связи" in result.lower()
+
+    def test_expert_depth_triggers_detailed(self, agent_service):
+        """Экспертный уровень глубины тоже включает развернутый формат."""
+        from app.schemas.agent_settings import AgentSettingsSchema
+        settings = AgentSettingsSchema(analysis_depth="экспертный уровень")
+        result = agent_service._build_format_instructions(settings)
+        assert "подробно" in result.lower() or "связи" in result.lower()
+
+    def test_default_style(self, agent_service):
+        """Дефолтный стиль — краткие сводки."""
+        from app.schemas.agent_settings import AgentSettingsSchema
+        settings = AgentSettingsSchema()
+        result = agent_service._build_format_instructions(settings)
+        assert "лаконичен" in result.lower() or "резюме" in result.lower()
+
+
 class TestProcessQuery:
     @pytest.mark.asyncio
     async def test_cache_hit_skips_pipeline(self, agent_service):

@@ -190,7 +190,7 @@ class AITools:
                         "published_at": item.published_at.isoformat(),
                         "importance_score": item.importance_score,
                         "sector": item.sector,
-                        "category": item.estimated_category,
+                        "category": item.category or item.estimated_category,
                         "views": item.views_count,
                         "tg_link": item.tg_link
                     }
@@ -362,7 +362,7 @@ class AITools:
 
         category_counts = {}
         for item in news_items:
-            cat = item.estimated_category or "общее"
+            cat = item.category or item.estimated_category or "общее"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
         trending = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:5]

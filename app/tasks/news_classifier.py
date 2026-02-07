@@ -27,7 +27,7 @@ def process_unprocessed_news_dispatcher():
     """Находит необработанные новости и запускает для каждой конвейер обработки."""
     logger.info("Dispatcher started: Looking for unprocessed news.")
     news_service = NewsService()
-    unprocessed_news_list = asyncio.run(news_service.get_unprocessed_news(limit=501))
+    unprocessed_news_list = asyncio.run(news_service.get_unprocessed_news(limit=50))
 
     if not unprocessed_news_list:
         logger.info("No new news to process.")
@@ -101,7 +101,6 @@ def generate_vector_embedding(self, news_id: int):
         vector = embedding_service.get_embedding(text_to_embed)
 
         # 2. Готовим payload для фильтрации в Qdrant
-        # TODO: Все ли важные поля payload мы прописали? Изучить потом
         payload = {
             "source_channel": news_item.source_channel,
             "published_at_iso": news_item.published_at.isoformat(),

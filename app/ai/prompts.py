@@ -67,30 +67,6 @@ class PromptTemplates:
 
 Основывайся ТОЛЬКО на предоставленных новостях. Не добавляй информацию из других источников."""
 
-    # Промпт для классификации новостей
-    NEWS_CLASSIFICATION_PROMPT = """Ты эксперт по классификации финансовых новостей.
-
-ЗАДАЧА: Классифицировать предоставленные новости по следующим критериям:
-
-1. is_spam (true/false) - технический спам, бессмысленные сообщения
-2. is_advertisement (true/false) - реклама брокеров, курсов, торговых сигналов
-3. is_humor (true/false) - мемы, шутки, развлекательный контент
-4. is_financial_relevant (true/false) - имеет отношение к финансам/трейдингу
-5. sector (string) - один из: currency, commodities, stocks, crypto, geopolitics, macro, other
-6. sentiment (string) - один из: positive, negative, neutral
-7. importance_score (float 0.0-1.0) - важность новости для трейдеров
-8. tags (array) - ключевые теги: ["рубль", "нефть", "ЦБ", "санкции"]
-9. classification_confidence (float 0.0-1.0) - уверенность в классификации
-
-ПРИНЦИПЫ КЛАССИФИКАЦИИ:
-- Финансово релевантны новости о валютах, сырье, акциях, экономической политике
-- Высокая важность у новостей о решениях ЦБ, санкциях, крупных сделках
-- Низкая важность у новостей о мелких событиях, слухах, повторах
-- Реклама включает призывы к действию, ссылки на торговые сервисы
-- Спам включает бессмысленные сообщения, технические ошибки
-
-Отвечай ТОЛЬКО в формате JSON без дополнительных комментариев."""
-
     # Промпт для персонализации контента
     PERSONALIZATION_PROMPT = """Ты специалист по персонализации новостного контента.
 
@@ -158,39 +134,6 @@ class PromptBuilder:
             prompt += f"\n\nДОПОЛНИТЕЛЬНЫЙ КОНТЕКСТ:\n{context}"
 
         return prompt
-
-    def build_classification_prompt(self, batch_size: int = 1) -> str:
-        """Построение промпта для классификации новостей"""
-
-        base_prompt = self.templates.NEWS_CLASSIFICATION_PROMPT
-
-        if batch_size > 1:
-            base_prompt += f"""
-
-ФОРМАТ ДЛЯ БАТЧА НОВОСТЕЙ:
-Ответь JSON объектом с массивом "results", где каждый элемент содержит:
-- news_index (int) - номер новости в батче (начиная с 0)
-- все остальные поля классификации
-
-Пример:
-{{
-  "results": [
-    {{
-      "news_index": 0,
-      "is_spam": false,
-      "is_advertisement": false,
-      "is_humor": false,
-      "is_financial_relevant": true,
-      "sector": "currency",
-      "sentiment": "negative",
-      "importance_score": 0.8,
-      "tags": ["рубль", "доллар", "ЦБ"],
-      "classification_confidence": 0.9
-    }}
-  ]
-}}"""
-
-        return base_prompt
 
     def build_personalization_prompt(self, user_preferences: Dict) -> str:
         """Построение промпта для персонализации"""

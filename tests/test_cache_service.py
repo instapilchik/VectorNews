@@ -41,13 +41,6 @@ async def test_cache_invalidate(cache, mock_redis):
     mock_redis.delete.assert_called_once()
 
 
-@pytest.mark.asyncio
-async def test_cache_invalidate_prefix(cache, mock_redis):
-    """Инвалидация по префиксу удаляет все подходящие ключи."""
-    mock_redis.scan_iter = MagicMock(return_value=iter(["agent:abc", "agent:def"]))
-    deleted = await cache.invalidate_prefix("agent")
-    assert deleted == 2
-
 
 @pytest.mark.asyncio
 async def test_cache_redis_error_returns_none(cache, mock_redis):

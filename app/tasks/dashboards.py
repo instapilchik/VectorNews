@@ -179,3 +179,33 @@ def calculate_hot_topics():
 
     except Exception as e:
         logger.error(f"Error in calculate_hot_topics: {e}", exc_info=True)
+
+
+@celery_app.task(name="app.tasks.dashboards.cleanup_stale_cache")
+def cleanup_stale_cache():
+    """
+    Ежедневная очистка устаревших ключей кэша в Redis.
+    Удаляет ключи dashboard:*, у которых нет TTL (забытые/устаревшие).
+    """
+    logger.info("Starting Redis cache cleanup...")
+    try:
+        cleaned = 0
+        # Сканируем ключи с паттерном dashboard:*
+        cursor = 0
+        while True:
+            cursor, keys = _run_async(redis_client.scan(cursor, match="dashboard:*", count=100))
+            for key in keys:
+                ttl = _run_async(redis_client.ttl(key))
+                # TTL == -1 означает, что ключ существует, но без срока истечения
+                if ttl == -1:
+                    _run_async(redis_client.delete(key))
+                    cleaned += 1
+            if cursor == 0:
+                break
+
+        logger.info(f"Cache cleanup finished. Removed {cleaned} stale keys.")
+        return {"status": "success", "cleaned_keys": cleaned}
+
+    except Exception as e:
+        logger.error(f"Error in cleanup_stale_cache: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}

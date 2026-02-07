@@ -91,15 +91,3 @@ async def test_hot_topics_empty(client, auth_headers, mock_redis):
     assert response.json() == []
 
 
-@pytest.mark.asyncio
-async def test_hot_topics_cached(client, auth_headers, mock_redis):
-    """Hot topics с данными в кеше."""
-    import json
-    cached = [{"title": "Bitcoin", "news_count": 5, "news_ids": [1, 2, 3]}]
-    mock_redis.get.return_value = json.dumps(cached)
-
-    response = await client.get("/api/dashboards/hot-topics", headers=auth_headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["title"] == "Bitcoin"

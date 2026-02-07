@@ -213,7 +213,7 @@ async def get_recent_news(
                     "source": item.source_channel,
                     "text": item.original_text[:200] + "..." if len(item.original_text) > 200 else item.original_text,
                     "published_at": item.published_at,
-                    "category": item.estimated_category,
+                    "category": item.category or item.estimated_category,
                     "views": item.views_count,
                     "tg_link": item.tg_link
                 }
