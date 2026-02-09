@@ -1,3 +1,4 @@
+import asyncio
 from celery import current_task
 from app.tasks.celery_app import celery_app, run_async
 from app.services.telegram_service import TelegramService
