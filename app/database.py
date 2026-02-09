@@ -46,16 +46,21 @@ async def get_redis():
     return redis_client
 
 async def init_db():
-    """Создание таблиц в БД"""
+    """Создание таблиц в БД и инициализация коллекции Qdrant"""
     try:
+        from app.models import Base as ModelsBase
         from app.models.news import NewsPost
         from app.models.agent_settings import AgentSettings
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(ModelsBase.metadata.create_all)
         logger.info("Database tables created successfully")
+
+        from app.services.vector_db_service import vector_db_service
+        vector_db_service.initialize_collection(vector_size=768)
     except Exception as e:
-        logger.error(f"Error creating database tables: {e}")
+        logger.error(f"Error initializing database/collections: {e}")
         raise e
 
 async def check_db_connection():

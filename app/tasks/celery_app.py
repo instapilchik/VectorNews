@@ -1,6 +1,26 @@
+import asyncio
 from celery import Celery
 from celery.schedules import crontab
 from app.config import settings
+
+
+def run_async(coro):
+    """
+    Запуск async-корутины из синхронного Celery-таска.
+    После выполнения сбрасывает пул соединений SQLAlchemy,
+    чтобы избежать конфликта event loop при следующем вызове.
+    Dispose вызывается внутри loop (до его закрытия),
+    чтобы asyncpg мог корректно закрыть соединения.
+    """
+    from app.database import engine
+
+    async def _with_cleanup():
+        try:
+            return await coro
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_with_cleanup())
 
 celery_app = Celery(
     "ai_news_manager",

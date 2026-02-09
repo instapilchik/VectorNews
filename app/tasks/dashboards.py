@@ -1,37 +1,17 @@
 import logging
 import json
-import asyncio
 import hdbscan
 import numpy as np
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from app.tasks.celery_app import celery_app
+from app.tasks.celery_app import celery_app, run_async
 from app.services.vector_db_service import VectorDBService, models
 from app.services.news_service import NewsService
 from app.services.llm_service import llm_service
 from app.database import redis_client
 
 logger = logging.getLogger(__name__)
-
-
-def _get_event_loop():
-    """Получаем или создаём event loop для синхронных Celery-тасков."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop
-
-
-def _run_async(coro):
-    """Обёртка для запуска async кода из синхронного Celery таска."""
-    loop = _get_event_loop()
-    return loop.run_until_complete(coro)
 
 
 def _calculate_hdbscan_params(num_points: int) -> dict:
@@ -80,8 +60,9 @@ def calculate_hot_topics():
     Анализирует векторы новостей за последние 24 часа, кластеризует их
     и определяет "горячие темы", сохраняя результат в Redis.
     """
-    logger.info("Starting hot topics calculation...")
-    try:
+
+    async def _calculate():
+        logger.info("Starting hot topics calculation...")
         vector_db = VectorDBService()
         news_service = NewsService()
 
@@ -151,12 +132,12 @@ def calculate_hot_topics():
             ]
 
             sample_ids = cluster_point_ids[:10]
-            news_items = _run_async(news_service.get_news_by_ids(sample_ids))
+            news_items = await news_service.get_news_by_ids(sample_ids)
 
             if not news_items:
                 continue
 
-            title = _run_async(_generate_topic_title(news_items))
+            title = await _generate_topic_title(news_items)
 
             hot_topics.append({
                 "title": title,
@@ -166,17 +147,17 @@ def calculate_hot_topics():
 
         # 5. Сохраняем в Redis
         if hot_topics:
-            _run_async(
-                redis_client.set(
-                    "dashboard:hot_topics",
-                    json.dumps(hot_topics, ensure_ascii=False),
-                    ex=7200
-                )
+            await redis_client.set(
+                "dashboard:hot_topics",
+                json.dumps(hot_topics, ensure_ascii=False),
+                ex=7200
             )
             logger.info(f"Saved {len(hot_topics)} hot topics to Redis.")
         else:
             logger.info("No hot topics to save.")
 
+    try:
+        run_async(_calculate())
     except Exception as e:
         logger.error(f"Error in calculate_hot_topics: {e}", exc_info=True)
 
@@ -187,18 +168,17 @@ def cleanup_stale_cache():
     Ежедневная очистка устаревших ключей кэша в Redis.
     Удаляет ключи dashboard:*, у которых нет TTL (забытые/устаревшие).
     """
-    logger.info("Starting Redis cache cleanup...")
-    try:
+
+    async def _cleanup():
+        logger.info("Starting Redis cache cleanup...")
         cleaned = 0
-        # Сканируем ключи с паттерном dashboard:*
         cursor = 0
         while True:
-            cursor, keys = _run_async(redis_client.scan(cursor, match="dashboard:*", count=100))
+            cursor, keys = await redis_client.scan(cursor, match="dashboard:*", count=100)
             for key in keys:
-                ttl = _run_async(redis_client.ttl(key))
-                # TTL == -1 означает, что ключ существует, но без срока истечения
+                ttl = await redis_client.ttl(key)
                 if ttl == -1:
-                    _run_async(redis_client.delete(key))
+                    await redis_client.delete(key)
                     cleaned += 1
             if cursor == 0:
                 break
@@ -206,6 +186,8 @@ def cleanup_stale_cache():
         logger.info(f"Cache cleanup finished. Removed {cleaned} stale keys.")
         return {"status": "success", "cleaned_keys": cleaned}
 
+    try:
+        return run_async(_cleanup())
     except Exception as e:
         logger.error(f"Error in cleanup_stale_cache: {e}", exc_info=True)
         return {"status": "error", "detail": str(e)}

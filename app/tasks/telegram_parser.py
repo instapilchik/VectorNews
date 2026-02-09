@@ -1,8 +1,8 @@
+import asyncio
 from celery import current_task
-from app.tasks.celery_app import celery_app
+from app.tasks.celery_app import celery_app, run_async
 from app.services.telegram_service import TelegramService
 from app.config import settings
-import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ def parse_all_channels(self):
     """Парсинг всех настроенных каналов"""
     try:
         logger.info("Starting scheduled parsing of all channels")
-        total_saved = asyncio.run(_parse_all_channels_async())
+        total_saved = run_async(_parse_all_channels_async())
         logger.info(f"Parsing completed. Total saved: {total_saved}")
         return {"status": "success", "total_saved": total_saved}
     except Exception as e:
@@ -53,7 +53,7 @@ def parse_single_channel(self, channel_username: str, days_back: int = 7):
     """Парсинг одного канала (для восстановления после сбоев)"""
     try:
         logger.info(f"Manual parsing of channel: {channel_username}")
-        result = asyncio.run(_parse_single_channel_async(channel_username, days_back))
+        result = run_async(_parse_single_channel_async(channel_username, days_back))
         return {"status": "success", "channel": channel_username, "saved": result}
     except Exception as e:
         logger.error(f"Error in parse_single_channel {channel_username}: {e}")
