@@ -6,7 +6,8 @@
     docker compose --profile prod exec celery-worker python auth_session.py
 
 Скрипт попросит ввести номер телефона и код из Telegram.
-Session-файл сохранится в Docker volume и переживёт рестарты контейнеров.
+Session-файл сохранится в корне проекта (ai_news_parser.session),
+который примонтирован в контейнер через bind mount.
 Перезапуск worker после авторизации НЕ требуется — следующий таск
 подхватит сессию автоматически.
 """
@@ -17,6 +18,17 @@ import sys
 
 from telethon import TelegramClient
 
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Загрузка переменных окружения из .env
+dotenv_path = Path(__file__).resolve().parent / '.env'
+if dotenv_path.exists():
+    load_dotenv(dotenv_path)
+    print(f"Загружены переменные окружения из {dotenv_path}")
+else:
+    print(f"Внимание: файл .env не найден в {dotenv_path}")
+
 
 async def main():
     api_id = os.environ.get("TELEGRAM_API_ID")
@@ -26,11 +38,6 @@ async def main():
     if not api_id or not api_hash:
         print("TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in environment")
         sys.exit(1)
-
-    # Убедимся что директория для session-файла существует
-    session_dir = os.path.dirname(session_name)
-    if session_dir:
-        os.makedirs(session_dir, exist_ok=True)
 
     print(f"Session path: {session_name}.session")
     print("Starting Telegram authorization...")

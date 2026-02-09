@@ -43,7 +43,7 @@ services:
     environment:
       - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      test: ["CMD-SHELL", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/6333' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -80,7 +80,7 @@ services:
     command: celery -A app.tasks.celery_app worker --loglevel=info --pool=solo
     env_file: .env
     volumes:
-      - telegram_sessions:/app/sessions
+      - ./ai_news_parser.session:/app/ai_news_parser.session
       - model_cache:/root/.cache/huggingface
     depends_on:
       postgres:
@@ -106,5 +106,4 @@ volumes:
   postgres_data:
   redis_data:
   qdrant_data:
-  telegram_sessions:
   model_cache:
