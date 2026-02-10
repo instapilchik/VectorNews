@@ -44,7 +44,8 @@ class Settings(BaseSettings):
         "@bbbreaking",
         # "@rybar",
         # "@breakingmash",
-        # "@rbc_news"
+        # "@rbc_news",
+        "@markettwits"
     ]
     parse_interval_minutes: int = 30
     parse_overlap_hours: int = 2
