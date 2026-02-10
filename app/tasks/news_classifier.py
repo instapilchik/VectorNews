@@ -28,7 +28,7 @@ def process_unprocessed_news_dispatcher():
 
     async def _dispatch():
         news_service = NewsService()
-        return await news_service.get_unprocessed_news(limit=50)
+        return await news_service.get_unprocessed_news(limit=500)
 
     unprocessed_news_list = run_async(_dispatch())
 
