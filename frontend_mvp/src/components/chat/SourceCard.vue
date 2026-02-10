@@ -4,6 +4,7 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   source: NewsSourceResponse
+  index?: number
 }>()
 
 const relativeTime = computed(() => {
@@ -27,7 +28,10 @@ const relativeTime = computed(() => {
     rel="noopener noreferrer"
     class="block rounded-md border border-stone-200 p-3 transition-base hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:hover:border-stone-600 dark:hover:bg-stone-800"
   >
-    <p class="text-sm text-stone-900 dark:text-stone-50">{{ source.summary }}</p>
+    <p class="text-sm text-stone-900 dark:text-stone-50">
+      <span v-if="index" class="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded bg-stone-200 text-xs font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">{{ index }}</span>
+      {{ source.summary }}
+    </p>
     <div class="mt-1.5 flex items-center gap-2 text-xs text-stone-400 dark:text-stone-500">
       <span>{{ source.source_channel }}</span>
       <span>&middot;</span>

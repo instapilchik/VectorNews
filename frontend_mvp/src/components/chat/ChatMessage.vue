@@ -45,9 +45,10 @@ const renderedContent = computed(() => {
       <div v-if="message.sources && message.sources.length > 0" class="mt-3 space-y-2">
         <p class="text-xs font-medium text-stone-500 dark:text-stone-400">Источники:</p>
         <SourceCard
-          v-for="source in message.sources"
+          v-for="(source, idx) in message.sources"
           :key="source.id"
           :source="source"
+          :index="idx + 1"
         />
       </div>
     </div>

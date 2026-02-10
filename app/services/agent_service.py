@@ -44,7 +44,6 @@ class AgentService:
         self.search_limit = 50
         self.rerank_top_k = 15  # Сколько оставляем после reranking
         self.context_news_count = 10
-        self.final_sources_count = 5
         self.settings_service = agent_settings_service
         self.cache = cache_service
         self.cache_ttl = 300  # 5 минут для ответов агента
@@ -318,15 +317,16 @@ class AgentService:
         generated_answer = await self._synthesize_answer(query, context_for_synthesis, settings)
 
         # --- Шаг 4: Формирование источников для ответа ---
+        # Возвращаем ВСЕ источники, которые видела LLM, чтобы номера в тексте совпадали с карточками
         sources = [
             NewsSource(
                 id=item.id,
                 tg_link=item.tg_link,
-                summary=item.summary or item.original_text[:250],  # Используем summary, если есть
+                summary=item.summary or item.original_text[:250],
                 source_channel=item.source_channel,
                 published_at=item.published_at.isoformat()
             )
-            for item in news_items[:self.final_sources_count]  # Ограничиваем количество источников для показа
+            for item in context_for_synthesis
         ]
 
         # --- Кешируем результат ---
