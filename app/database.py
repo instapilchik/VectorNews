@@ -51,6 +51,7 @@ async def init_db():
         from app.models import Base as ModelsBase
         from app.models.news import NewsPost
         from app.models.agent_settings import AgentSettings
+        from app.models.user import User
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     qdrant_api_key: Optional[str]
     qdrant_collection_name: str
 
+    # JWT Authentication
+    jwt_secret_key: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480  # 8 часов
+    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+
     # App Settings
     environment: str = "development"
     log_level: str = "INFO"

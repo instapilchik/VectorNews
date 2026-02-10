@@ -4,3 +4,4 @@ Base = declarative_base()
 
 # Импортируем все модели чтобы они были зарегистрированы
 from app.models.news import NewsPost
+from app.models.user import User

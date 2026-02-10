@@ -15,6 +15,8 @@ torch==2.5.1
 hdbscan==0.8.40
 nest-asyncio==1.6.0
 slowapi==0.1.9
+python-jose[cryptography]==3.3.0
+bcrypt==4.2.1
 pytest==8.3.4
 pytest-asyncio==0.24.0
 # pip install torch --index-url https://download.pytorch.org/whl/cpu
