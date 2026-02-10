@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, Boolean, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, Boolean, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from app.models import Base
@@ -53,6 +53,10 @@ class NewsPost(Base):
     # Базовая категория из парсера (keyword-matching при импорте из TG)
     estimated_category = Column(String(100), nullable=True)
     language = Column(String(10), default='ru')
+
+    # Дедупликация
+    skip_reason = Column(String, nullable=True, index=True)
+    duplicate_of = Column(Integer, ForeignKey("news_posts.id"), nullable=True)
 
     # Индексы для оптимизации
     __table_args__ = (
