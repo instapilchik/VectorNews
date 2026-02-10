@@ -102,6 +102,17 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  frontend:
+    profiles: ["prod"]
+    build:
+      context: ./frontend_mvp
+    container_name: ai_news_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
