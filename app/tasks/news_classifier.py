@@ -103,7 +103,27 @@ def generate_vector_embedding(self, news_id: int):
         # 1. Получаем вектор
         vector = embedding_service.get_embedding(text_to_embed)
 
-        # 2. Готовим payload для фильтрации в Qdrant
+        # 2. Проверяем на кросс-канальный дубль (только если есть published_at)
+        duplicates = []
+        if news_item.published_at:
+            duplicates = vector_db_service.find_near_duplicates(
+                vector=vector,
+                published_at=news_item.published_at,
+                source_channel=news_item.source_channel,
+            )
+        else:
+            logger.warning(f"[generate_vector_embedding] news_id {news_id} has no published_at, skipping dedup check.")
+
+        if duplicates:
+            original_id = duplicates[0].id
+            logger.info(
+                f"[generate_vector_embedding] news_id {news_id} is a duplicate of {original_id} "
+                f"(score={duplicates[0].score:.4f}). Skipping Qdrant upsert."
+            )
+            await news_service.mark_as_duplicate(news_id, duplicate_of=original_id)
+            return news_id
+
+        # 3. Готовим payload для фильтрации в Qdrant
         payload = {
             "source_channel": news_item.source_channel,
             "published_at_iso": news_item.published_at.isoformat(),
@@ -115,7 +135,7 @@ def generate_vector_embedding(self, news_id: int):
         # Убираем None значения, чтобы не засорять payload
         payload = {k: v for k, v in payload.items() if v is not None}
 
-        # 3. Сохраняем вектор и payload в Qdrant
+        # 4. Сохраняем вектор и payload в Qdrant
         vector_db_service.upsert_point(news_id=news_item.id, vector=vector, payload=payload)
 
         logger.info(f"[generate_vector_embedding] Successfully processed news_id: {news_id}")

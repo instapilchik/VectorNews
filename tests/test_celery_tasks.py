@@ -35,7 +35,7 @@ class TestEnrichMetadata:
 
         with patch("app.tasks.news_classifier.NewsService") as MockNewsService, \
              patch("app.tasks.news_classifier.llm_service") as mock_llm, \
-             patch("app.tasks.news_classifier.asyncio.run", side_effect=_sync_run):
+             patch("app.tasks.news_classifier.run_async", side_effect=_sync_run):
 
             mock_svc = MockNewsService.return_value
             mock_svc.get_news_by_id = AsyncMock(return_value=mock_news)
@@ -57,7 +57,7 @@ class TestEnrichMetadata:
 
         with patch("app.tasks.news_classifier.NewsService") as MockNewsService, \
              patch("app.tasks.news_classifier.llm_service") as mock_llm, \
-             patch("app.tasks.news_classifier.asyncio.run", side_effect=_sync_run):
+             patch("app.tasks.news_classifier.run_async", side_effect=_sync_run):
 
             mock_svc = MockNewsService.return_value
             mock_svc.get_news_by_id = AsyncMock(return_value=mock_news)
@@ -77,11 +77,12 @@ class TestGenerateVectorEmbedding:
         with patch("app.tasks.news_classifier.NewsService") as MockNewsService, \
              patch("app.tasks.news_classifier.embedding_service") as mock_emb, \
              patch("app.tasks.news_classifier.vector_db_service") as mock_vdb, \
-             patch("app.tasks.news_classifier.asyncio.run", side_effect=_sync_run):
+             patch("app.tasks.news_classifier.run_async", side_effect=_sync_run):
 
             mock_svc = MockNewsService.return_value
             mock_svc.get_news_by_id = AsyncMock(return_value=mock_news)
             mock_emb.get_embedding = MagicMock(return_value=[0.1] * 768)
+            mock_vdb.find_near_duplicates = MagicMock(return_value=[])
 
             from app.tasks.news_classifier import generate_vector_embedding
             result = generate_vector_embedding(1)
@@ -98,7 +99,7 @@ class TestGenerateVectorEmbedding:
         with patch("app.tasks.news_classifier.NewsService") as MockNewsService, \
              patch("app.tasks.news_classifier.embedding_service") as mock_emb, \
              patch("app.tasks.news_classifier.vector_db_service"), \
-             patch("app.tasks.news_classifier.asyncio.run", side_effect=_sync_run):
+             patch("app.tasks.news_classifier.run_async", side_effect=_sync_run):
 
             mock_svc = MockNewsService.return_value
             mock_svc.get_news_by_id = AsyncMock(return_value=mock_news)
@@ -110,11 +111,60 @@ class TestGenerateVectorEmbedding:
             mock_emb.get_embedding.assert_not_called()
 
 
+class TestDeduplication:
+    def test_duplicate_detected_skips_upsert(self):
+        """Если find_near_duplicates нашёл дубль — upsert не вызывается, новость помечается как дубль."""
+        mock_news = _make_news_item(news_id=100)
+        mock_duplicate = MagicMock()
+        mock_duplicate.id = 50
+        mock_duplicate.score = 0.95
+
+        with patch("app.tasks.news_classifier.NewsService") as MockNewsService, \
+             patch("app.tasks.news_classifier.embedding_service") as mock_emb, \
+             patch("app.tasks.news_classifier.vector_db_service") as mock_vdb, \
+             patch("app.tasks.news_classifier.run_async", side_effect=_sync_run):
+
+            mock_svc = MockNewsService.return_value
+            mock_svc.get_news_by_id = AsyncMock(return_value=mock_news)
+            mock_svc.mark_as_duplicate = AsyncMock()
+            mock_emb.get_embedding = MagicMock(return_value=[0.1] * 768)
+            mock_vdb.find_near_duplicates = MagicMock(return_value=[mock_duplicate])
+
+            from app.tasks.news_classifier import generate_vector_embedding
+            result = generate_vector_embedding(100)
+
+            assert result == 100
+            mock_vdb.find_near_duplicates.assert_called_once()
+            mock_svc.mark_as_duplicate.assert_called_once_with(100, duplicate_of=50)
+            mock_vdb.upsert_point.assert_not_called()
+
+    def test_no_duplicate_proceeds_with_upsert(self):
+        """Если дублей не найдено — upsert выполняется, mark_as_duplicate не вызывается."""
+        mock_news = _make_news_item(news_id=101)
+
+        with patch("app.tasks.news_classifier.NewsService") as MockNewsService, \
+             patch("app.tasks.news_classifier.embedding_service") as mock_emb, \
+             patch("app.tasks.news_classifier.vector_db_service") as mock_vdb, \
+             patch("app.tasks.news_classifier.run_async", side_effect=_sync_run):
+
+            mock_svc = MockNewsService.return_value
+            mock_svc.get_news_by_id = AsyncMock(return_value=mock_news)
+            mock_svc.mark_as_duplicate = AsyncMock()
+            mock_emb.get_embedding = MagicMock(return_value=[0.1] * 768)
+            mock_vdb.find_near_duplicates = MagicMock(return_value=[])
+
+            from app.tasks.news_classifier import generate_vector_embedding
+            result = generate_vector_embedding(101)
+
+            assert result == 101
+            mock_vdb.upsert_point.assert_called_once()
+            mock_svc.mark_as_duplicate.assert_not_called()
+
 class TestMarkAsProcessed:
     def test_marks_news_as_processed(self):
         """Коллбэк должен пометить новость как обработанную."""
         with patch("app.tasks.news_classifier.NewsService") as MockNewsService, \
-             patch("app.tasks.news_classifier.asyncio.run", side_effect=_sync_run):
+             patch("app.tasks.news_classifier.run_async", side_effect=_sync_run):
 
             mock_svc = MockNewsService.return_value
             mock_svc.mark_as_processed = AsyncMock()

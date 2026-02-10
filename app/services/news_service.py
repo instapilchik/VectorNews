@@ -21,7 +21,8 @@ class NewsService:
             stmt = select(NewsPost).where(
                 and_(
                     NewsPost.category == category,
-                    NewsPost.is_processed == True
+                    NewsPost.is_processed == True,
+                    NewsPost.skip_reason.is_(None)
                 )
             ).order_by(desc(NewsPost.published_at)).limit(limit)
 
@@ -129,12 +130,33 @@ class NewsService:
             stmt = select(NewsPost).where(
                 and_(
                     NewsPost.is_processed == False,
-                    NewsPost.original_text.isnot(None)
+                    NewsPost.original_text.isnot(None),
+                    NewsPost.skip_reason.is_(None)
                 )
             ).order_by(desc(NewsPost.published_at)).limit(limit)
 
             result = await session.execute(stmt)
             return result.scalars().all()
+
+    async def mark_as_duplicate(self, news_id: int, duplicate_of: int) -> None:
+        """Помечает новость как кросс-канальный дубль."""
+        async with async_session() as session:
+            try:
+                news_post = await session.get(NewsPost, news_id)
+                if not news_post:
+                    logger.warning(f"News post {news_id} not found for duplicate marking.")
+                    return
+
+                news_post.skip_reason = "cross_channel_duplicate"
+                news_post.duplicate_of = duplicate_of
+                news_post.is_processed = True
+                news_post.processed_at = datetime.utcnow()
+                await session.commit()
+                logger.info(f"Marked news_id {news_id} as duplicate of {duplicate_of}")
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error marking news_id {news_id} as duplicate: {e}")
+                raise e
 
     async def mark_as_processed(self, news_ids: List[int]) -> None:
         """Пометка новостей как обработанных"""
@@ -174,7 +196,8 @@ class NewsService:
             stmt = select(NewsPost).where(
                 and_(
                     NewsPost.published_at >= since_date,
-                    NewsPost.is_spam == False
+                    NewsPost.is_spam == False,
+                    NewsPost.skip_reason.is_(None)
                 )
             )
 
@@ -222,7 +245,8 @@ class NewsService:
             stmt = select(func.count(NewsPost.id)).where(
                 and_(
                     NewsPost.published_at >= since_date,
-                    NewsPost.is_spam == False
+                    NewsPost.is_spam == False,
+                    NewsPost.skip_reason.is_(None)
                 )
             )
 

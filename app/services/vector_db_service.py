@@ -1,6 +1,7 @@
 import logging
+from datetime import datetime, timedelta
 from qdrant_client import QdrantClient, models
-from qdrant_client.http.models import Distance, VectorParams, PointStruct
+from qdrant_client.http.models import Distance, VectorParams, PointStruct, ScoredPoint
 from app.config import settings
 from typing import List, Dict, Any, Optional
 from qdrant_client.http.models import SearchRequest
@@ -54,6 +55,55 @@ class VectorDBService:
             wait=True # Ждем подтверждения от Qdrant
         )
         logger.debug(f"Upserted point for news_id: {news_id}")
+
+    def find_near_duplicates(
+        self,
+        vector: List[float],
+        published_at: datetime,
+        source_channel: str,
+        score_threshold: float = 0.93,
+        time_window_hours: int = 1,
+        limit: int = 3,
+    ) -> List[ScoredPoint]:
+        """
+        Ищет семантически похожие новости из других каналов в заданном временном окне.
+        Возвращает список кандидатов-дублей (score >= score_threshold).
+        """
+        time_from = published_at - timedelta(hours=time_window_hours)
+        time_to = published_at + timedelta(hours=time_window_hours)
+
+        query_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="published_at",
+                    range=models.Range(
+                        gte=int(time_from.timestamp()),
+                        lte=int(time_to.timestamp()),
+                    ),
+                ),
+            ],
+            must_not=[
+                models.FieldCondition(
+                    key="source_channel",
+                    match=models.MatchValue(value=source_channel),
+                ),
+            ],
+        )
+
+        try:
+            hits = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=vector,
+                query_filter=query_filter,
+                score_threshold=score_threshold,
+                limit=limit,
+                with_payload=False,
+                with_vectors=False,
+            )
+            return hits
+        except Exception as e:
+            logger.error(f"Error searching for near duplicates: {e}")
+            return []
 
     def search(self, vector: List[float], limit: int = 10, query_filter: Optional[models.Filter] = None) -> List[models.ScoredPoint]:
         """
