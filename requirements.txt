@@ -12,7 +12,7 @@ telethon==1.38.1
 qdrant-client==1.12.1
 sentence-transformers==3.3.1
 torch==2.5.1
-hdbscan==0.8.40
+scikit-learn>=1.8.0
 nest-asyncio==1.6.0
 slowapi==0.1.9
 python-jose[cryptography]==3.3.0

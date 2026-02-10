@@ -1,7 +1,7 @@
 import logging
 import json
-import hdbscan
 import numpy as np
+from sklearn.cluster import HDBSCAN
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -15,15 +15,19 @@ logger = logging.getLogger(__name__)
 
 
 def _calculate_hdbscan_params(num_points: int) -> dict:
-    """Динамически подбираем параметры HDBSCAN в зависимости от размера выборки."""
+    """Динамически подбираем параметры HDBSCAN в зависимости от размера выборки.
+
+    NB: sklearn.cluster.HDBSCAN считает min_samples включая саму точку,
+    а standalone hdbscan — без неё. Значения ниже уже скорректированы (+1).
+    """
     if num_points < 30:
-        return {"min_cluster_size": 3, "min_samples": 2, "cluster_selection_method": "leaf"}
+        return {"min_cluster_size": 3, "min_samples": 3, "cluster_selection_method": "leaf"}
     elif num_points < 100:
-        return {"min_cluster_size": 4, "min_samples": 2, "cluster_selection_method": "leaf"}
+        return {"min_cluster_size": 4, "min_samples": 3, "cluster_selection_method": "leaf"}
     elif num_points < 300:
-        return {"min_cluster_size": 5, "min_samples": 3, "cluster_selection_method": "eom"}
+        return {"min_cluster_size": 5, "min_samples": 4, "cluster_selection_method": "eom"}
     else:
-        return {"min_cluster_size": 8, "min_samples": 3, "cluster_selection_method": "eom"}
+        return {"min_cluster_size": 8, "min_samples": 4, "cluster_selection_method": "eom"}
 
 
 async def _generate_topic_title(news_items) -> str:
@@ -98,7 +102,7 @@ def calculate_hot_topics():
         params = _calculate_hdbscan_params(num_points)
         logger.info(f"HDBSCAN params for {num_points} points: {params}")
 
-        clusterer = hdbscan.HDBSCAN(
+        clusterer = HDBSCAN(
             min_cluster_size=params["min_cluster_size"],
             min_samples=params["min_samples"],
             metric='euclidean',

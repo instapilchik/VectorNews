@@ -19,7 +19,7 @@ class TestCalculateHdbscanParams:
         from app.tasks.dashboards import _calculate_hdbscan_params
         params = _calculate_hdbscan_params(15)
         assert params["min_cluster_size"] == 3
-        assert params["min_samples"] == 2
+        assert params["min_samples"] == 3
         assert params["cluster_selection_method"] == "leaf"
 
     def test_small_dataset(self):
@@ -27,7 +27,7 @@ class TestCalculateHdbscanParams:
         from app.tasks.dashboards import _calculate_hdbscan_params
         params = _calculate_hdbscan_params(50)
         assert params["min_cluster_size"] == 4
-        assert params["min_samples"] == 2
+        assert params["min_samples"] == 3
         assert params["cluster_selection_method"] == "leaf"
 
     def test_medium_dataset(self):
@@ -35,7 +35,7 @@ class TestCalculateHdbscanParams:
         from app.tasks.dashboards import _calculate_hdbscan_params
         params = _calculate_hdbscan_params(200)
         assert params["min_cluster_size"] == 5
-        assert params["min_samples"] == 3
+        assert params["min_samples"] == 4
         assert params["cluster_selection_method"] == "eom"
 
     def test_large_dataset(self):
@@ -43,7 +43,7 @@ class TestCalculateHdbscanParams:
         from app.tasks.dashboards import _calculate_hdbscan_params
         params = _calculate_hdbscan_params(500)
         assert params["min_cluster_size"] == 8
-        assert params["min_samples"] == 3
+        assert params["min_samples"] == 4
         assert params["cluster_selection_method"] == "eom"
 
     def test_boundary_30(self):
