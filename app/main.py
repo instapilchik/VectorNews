@@ -10,13 +10,14 @@ else:
     print(f"Внимание: файл .env не найден в {dotenv_path}")
 
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import init_db, check_db_connection, check_redis_connection
-from app.api.deps import get_user_from_header, limiter
+from app.api.deps import get_authenticated_user, require_admin, limiter
 
 # Настройка логирования
 logging.basicConfig(
@@ -63,28 +64,42 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI News Manager",
     description="Персональный новостной аналитик для трейдеров",
-    version="1.1.0",
+    version="1.2.0",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 from app.api.endpoints import agent as agent_router
 from app.api.endpoints import agent_settings as agent_settings_router
 from app.api.endpoints import dashboards as dashboards_router
+from app.api.endpoints import auth as auth_router
+from app.api.endpoints import admin_users as admin_users_router
 
 app.include_router(agent_router.router, prefix="/api/agent", tags=["AI Agent"])
 app.include_router(agent_settings_router.router, prefix="/api/agent", tags=["AI Agent Settings"])
 app.include_router(dashboards_router.router, prefix="/api/dashboards", tags=["Dashboards"])
+app.include_router(auth_router.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(admin_users_router.router, prefix="/api/admin", tags=["Admin - Users"])
 
 @app.get("/")
 async def root():
     """Корневой endpoint"""
     return {
         "message": "AI News Manager API",
-        "version": "1.0.0",
+        "version": "1.2.0",
         "environment": settings.environment,
         "telegram_channels": settings.telegram_channels
     }
@@ -106,21 +121,13 @@ async def health_check():
     }
 
 
-@app.get("/api/test")
-async def test_auth(user=Depends(get_user_from_header)):
-    """Тестовый endpoint для проверки аутентификации"""
-    return {
-        "message": "Authentication successful!",
-        "user": user
-    }
 
-
-# Новые endpoints для тестирования парсинга
+# Новые endpoints для тестирования парсинга (admin-only via JWT)
 @app.post("/api/admin/parse-channel")
 async def manual_parse_channel(
         channel: str,
         days_back: int = 1,
-        user=Depends(get_user_from_header)
+        user=Depends(require_admin)
 ):
     """Ручной запуск парсинга канала (для админов)"""
     from app.tasks.telegram_parser import parse_single_channel
@@ -136,11 +143,9 @@ async def manual_parse_channel(
 
 
 @app.post("/api/admin/initial-fill")
-async def start_initial_fill(user=Depends(get_user_from_header)):
+async def start_initial_fill(user=Depends(require_admin)):
     """Запуск первичного наполнения БД"""
     from app.tasks.telegram_parser import initial_db_fill
-    # from app.services.vector_db_service import vector_db_service
-    # vector_db_service.initialize_collection(vector_size=768)
 
     try:
         task = initial_db_fill.delay()
@@ -152,11 +157,9 @@ async def start_initial_fill(user=Depends(get_user_from_header)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/admin/process_unprocessed_news_dispatcher")
-async def start_unprocessed(user=Depends(get_user_from_header)):
+async def start_unprocessed(user=Depends(require_admin)):
     """Тест-ендпоинт для ручного запуска процессирования пайплайна"""
     from app.tasks.news_classifier import process_unprocessed_news_dispatcher
-    # from app.services.vector_db_service import vector_db_service
-    # vector_db_service.initialize_collection(vector_size=768)
 
     try:
         task = process_unprocessed_news_dispatcher.delay()
@@ -169,7 +172,7 @@ async def start_unprocessed(user=Depends(get_user_from_header)):
 
 
 @app.post("/api/admin/calculate_hot_topics")
-async def start_hot_topics_calculation(user=Depends(get_user_from_header)):
+async def start_hot_topics_calculation(user=Depends(require_admin)):
     """Ендпоинт для ручного запуска расчёта горячих тем"""
     from app.tasks.dashboards import calculate_hot_topics
 
@@ -188,7 +191,7 @@ async def get_recent_news(
         limit: int = 20,
         offset: int = 0,
         hours: int = 24,
-        user=Depends(get_user_from_header)
+        user=Depends(get_authenticated_user)
 ):
     """Получение последних новостей с пагинацией"""
     from app.services.news_service import NewsService

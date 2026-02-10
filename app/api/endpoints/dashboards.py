@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from typing import List, Optional
 
 from app.ai.schemas import NewsCategory
-from app.api.deps import get_user_from_header, limiter
+from app.api.deps import get_authenticated_user, limiter
 from app.api.endpoints.agent import ChatResponse, NewsSourceResponse
 from app.services.agent_service import agent_service
 from app.services.news_service import NewsService
@@ -46,7 +46,7 @@ async def get_thematic_dashboard(
         request: Request,
         category: NewsCategory = Query(..., description="Категория для фильтрации"),
         limit: int = Query(20, ge=5, le=50),
-        user_info=Depends(get_user_from_header)
+        user_info=Depends(get_authenticated_user)
 ):
     """
     Возвращает список последних новостей для указанной тематической категории.
@@ -79,7 +79,7 @@ async def get_thematic_dashboard(
     summary="Сводка 'Главное за день'"
 )
 @limiter.limit("10/minute")
-async def get_daily_briefing(request: Request, user_info=Depends(get_user_from_header)):
+async def get_daily_briefing(request: Request, user_info=Depends(get_authenticated_user)):
     """
     Генерирует персонализированную сводку ключевых новостей за последние 24 часа.
     """
@@ -105,7 +105,7 @@ async def get_daily_briefing(request: Request, user_info=Depends(get_user_from_h
     summary="Дашборд 'Горячие темы'"
 )
 @limiter.limit("30/minute")
-async def get_hot_topics(request: Request, user_info=Depends(get_user_from_header)):
+async def get_hot_topics(request: Request, user_info=Depends(get_authenticated_user)):
     """
     Возвращает список самых обсуждаемых тем, рассчитанный в фоновом режиме.
     """

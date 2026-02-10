@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.schemas.agent_settings import AgentSettingsSchema
 from app.services.agent_settings_service import agent_settings_service
-from app.api.deps import get_user_from_header, limiter
+from app.api.deps import get_authenticated_user, limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("/settings", response_model=AgentSettingsSchema, summary="Получить настройки агента")
 @limiter.limit("30/minute")
-async def get_agent_settings(request: Request, user_info=Depends(get_user_from_header)):
+async def get_agent_settings(request: Request, user_info=Depends(get_authenticated_user)):
     user_id = user_info.get("user_id")
     try:
         return await agent_settings_service.get_settings(user_id)
@@ -24,7 +24,7 @@ async def get_agent_settings(request: Request, user_info=Depends(get_user_from_h
 async def update_agent_settings(
     settings: AgentSettingsSchema,
     request: Request,
-    user_info=Depends(get_user_from_header)
+    user_info=Depends(get_authenticated_user)
 ):
     user_id = user_info.get("user_id")
     try:

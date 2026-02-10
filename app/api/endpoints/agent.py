@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
 
-from app.api.deps import get_user_from_header, limiter
+from app.api.deps import get_authenticated_user, limiter
 from app.services.agent_service import agent_service, NewsSource
 
 router = APIRouter()
@@ -32,7 +32,7 @@ class ChatResponse(BaseModel):
 async def handle_chat(
     request: Request,
     body: ChatRequest,
-    user_info=Depends(get_user_from_header)
+    user_info=Depends(get_authenticated_user)
 ):
     """
     Основной эндпоинт для взаимодействия с ИИ-агентом.
