@@ -5,7 +5,7 @@ import { setAuthInterceptors } from '@/api/client'
 import type { UserResponse } from '@/api/types'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(null)
+  const token = ref<string | null>(sessionStorage.getItem('auth_token'))
   const user = ref<UserResponse | null>(null)
 
   const isAuthenticated = computed(() => !!token.value)
@@ -22,6 +22,17 @@ export const useAuthStore = defineStore('auth', () => {
     const response = await apiLogin({ username, password })
     token.value = response.access_token
     user.value = response.user
+    sessionStorage.setItem('auth_token', response.access_token)
+  }
+
+  async function init() {
+    if (token.value) {
+      try {
+        user.value = await getMe()
+      } catch {
+        logout()
+      }
+    }
   }
 
   async function fetchUser() {
@@ -32,6 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     token.value = null
     user.value = null
+    sessionStorage.removeItem('auth_token')
   }
 
   return {
@@ -41,6 +53,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     setupInterceptors,
     login,
+    init,
     fetchUser,
     logout,
   }

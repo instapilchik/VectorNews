@@ -16,7 +16,10 @@ app.use(router)
 const authStore = useAuthStore()
 authStore.setupInterceptors()
 
+// Restore session from sessionStorage
+authStore.init().finally(() => {
+  app.mount('#app')
+})
+
 // Initialize theme
 useThemeStore()
-
-app.mount('#app')
