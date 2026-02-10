@@ -51,10 +51,10 @@ else:
             "task": "app.tasks.telegram_parser.parse_all_channels",
             "schedule": settings.parse_interval_minutes * 60.0,  # каждые 30 мин (по умолчанию)
         },
-        # "classify-news-batch": {
-        #     "task": "app.tasks.news_classifier.process_unprocessed_news_dispatcher",
-        #     "schedule": 900.0,  # каждые 15 минут
-        # },
+        "classify-news-batch": {
+            "task": "app.tasks.news_classifier.process_unprocessed_news_dispatcher",
+            "schedule": 900.0,  # каждые 15 минут
+        },
         "calculate-hot-topics": {
             "task": "app.tasks.dashboards.calculate_hot_topics",
             "schedule": 7200.0,  # каждые 2 часа
