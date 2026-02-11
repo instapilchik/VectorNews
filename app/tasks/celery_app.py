@@ -12,12 +12,13 @@ def run_async(coro):
     Dispose вызывается внутри loop (до его закрытия),
     чтобы asyncpg мог корректно закрыть соединения.
     """
-    from app.database import engine
+    from app.database import engine, redis_client
 
     async def _with_cleanup():
         try:
             return await coro
         finally:
+            await redis_client.aclose()
             await engine.dispose()
 
     return asyncio.run(_with_cleanup())
