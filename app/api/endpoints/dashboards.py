@@ -100,6 +100,39 @@ async def get_daily_briefing(request: Request, user_info=Depends(get_authenticat
         raise HTTPException(status_code=500, detail="Failed to generate daily briefing.")
 
 @router.get(
+    "/news-by-ids",
+    response_model=List[NewsCard],
+    summary="Получить новости по списку ID"
+)
+@limiter.limit("30/minute")
+async def get_news_by_ids(
+        request: Request,
+        ids: str = Query(..., description="Список ID через запятую, например: 1,2,3"),
+        user_info=Depends(get_authenticated_user)
+):
+    """Возвращает новости по списку ID (для раскрытия горячих тем)."""
+    try:
+        news_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid IDs format")
+
+    news_service = NewsService()
+    news_items = await news_service.get_news_by_ids(news_ids)
+
+    return [
+        NewsCard(
+            id=item.id,
+            title=item.summary or item.original_text[:120],
+            source_channel=item.source_channel,
+            published_at=item.published_at,
+            tg_link=item.tg_link,
+            importance_score=item.importance_score,
+        )
+        for item in news_items
+    ]
+
+
+@router.get(
     "/hot-topics",
     response_model=List[HotTopic],
     summary="Дашборд 'Горячие темы'"

@@ -110,11 +110,12 @@ def calculate_hot_topics():
         )
         cluster_labels = clusterer.fit_predict(vectors_normalized)
 
-        # 3. Отбираем топ кластеры (без шума -1)
+        # 3. Отбираем топ кластеры (без шума -1 и аномально больших)
+        max_cluster_size = int(num_points * 0.3)
         label_counts = Counter(cluster_labels)
         top_clusters = [
             label for label, count in label_counts.most_common(6)
-            if label != -1
+            if label != -1 and count <= max_cluster_size
         ][:5]
 
         noise_count = label_counts.get(-1, 0)
