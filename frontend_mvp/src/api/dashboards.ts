@@ -11,6 +11,13 @@ export async function getDailyBriefing(): Promise<ChatResponse> {
   return res.data
 }
 
+export async function getNewsByIds(ids: number[]): Promise<NewsCard[]> {
+  const res = await apiClient.get<NewsCard[]>('/api/dashboards/news-by-ids', {
+    params: { ids: ids.join(',') },
+  })
+  return res.data
+}
+
 export async function getThematicNews(
   category: NewsCategory,
   limit: number = 20,
